@@ -544,7 +544,7 @@ async function doLogin() {
     const p = pEl.value;
 
     // Login Admin
-    if(u === 'admin' && p === '23778478') {
+    if(u === 'admin' && p === 'Rcrc2026') {
         user = { 
     		u: 'admin',
     		n: 'Administrador', 
@@ -622,7 +622,7 @@ function sync() {
         if (!snap.exists() || Object.keys(snap.val() || {}).length === 0) {
             const adminId = 'ADMIN_DEFAULT';
             db.ref(`users/${adminId}`).set({
-                id: adminId, u: 'admin', p: '23778478', role: 'Administrador', st: 'Ativo'
+                id: adminId, u: 'admin', p: 'Rcrc2026', role: 'Administrador', st: 'Ativo'
             });
         }
     });
