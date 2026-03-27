@@ -1,0 +1,2247 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <title>ROFREICRC v1.0 - GESTÃO INTEGRAL</title>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root { --p: #0f172a; --s: #334155; --acc: #2563eb; --ok: #16a34a; --err: #dc2626; --warn: #ea580c; --bg: #f8fafc; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: var(--bg); font-size: 12px; color: #1e293b; }
+        header { background: var(--p); color: white; padding: 15px; text-align: center; font-weight: bold; font-size: 16px; position: sticky; top: 0; z-index: 200;}
+        
+        nav { display: flex; flex-wrap: wrap; background: #e2e8f0; padding: 5px; gap: 5px; position: sticky; top: 49px; z-index: 100; }
+        nav button { flex: 1; min-width: 90px; padding: 10px; border: none; background: var(--s); color: white; cursor: pointer; font-weight: bold; border-radius: 4px; transition: 0.2s;}
+        nav button.active { background: var(--acc); box-shadow: inset 0 -4px 0 white; }
+
+        .container { padding: 15px; max-width: 1400px; margin: auto; }
+        .mod-sec { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        
+        /* Formularios */
+        .form-box { border: 1px solid #e2e8f0; padding: 15px; border-radius: 6px; margin-bottom: 20px; background: #fff; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        .full-w { grid-column: 1 / -1; }
+        label { font-weight: bold; display: block; margin-bottom: 4px; color: var(--s); }
+        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-family: inherit;}
+        
+        /* Botones de Formulario */
+        .btn-row-form { display: flex; gap: 10px; margin-top: 15px; }
+        .btn-main { background: var(--ok); color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; flex: 2; }
+        .btn-cancel { background: var(--s); color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; flex: 1; display: none; }
+        
+        /* Tablas y Filtros */
+        .filter-bar { background: #f1f5f9; padding: 10px; border-radius: 4px; margin: 15px 0; display: flex; gap: 10px; flex-wrap: wrap; border: 1px solid #e2e8f0; align-items: center;}
+        .filter-bar input, .filter-bar select { flex: 1; min-width: 120px; padding: 6px; font-size: 11px;}
+        
+        /* Tarjetas de Registros */
+        .group-header { background: var(--s); color: white; padding: 8px 15px; margin-top: 15px; border-radius: 4px; font-weight: bold; }
+        .card { border: 1px solid #e2e8f0; border-left: 5px solid var(--acc); padding: 15px; margin: 10px 0; border-radius: 4px; background: white; position: relative; transition: margin 0.3s ease;}
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px;}
+        .meta { font-size: 10px; color: #64748b; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; display: flex; justify-content: space-between; }
+        
+        /* Botones de Acción (Tarjeta) */
+        .actions { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
+        .actions button { padding: 6px 10px; border: none; border-radius: 3px; cursor: pointer; color: white; font-size: 10px; font-weight: bold; }
+        .b-edit { background: var(--acc); } .b-del { background: var(--err); } .b-hist { background: var(--s); } .b-file { background: var(--ok); } .b-note { background: var(--warn); }
+
+        /* Estilos Check-list Masivo */
+        .chk-mass { position: absolute; left: -30px; top: 15px; transform: scale(1.5); display: none; cursor: pointer; }
+        .mass-mode .chk-mass { display: block; }
+        .mass-mode .card { margin-left: 35px; border-left-color: var(--warn); }
+        .mass-panel { display: none; background: #fff7ed; padding: 10px; border-radius: 4px; margin-bottom: 10px; border: 1px solid #fdba74; }
+
+        /* Modales */
+        .modal { display:none; position:fixed; z-index:1000; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter: blur(2px); }
+        .modal-content { background:white; width:90%; max-width:800px; margin: 5% auto; padding: 20px; border-radius: 8px; max-height: 85vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2);}
+        
+        /* Tabla Notas de Encomienda */
+        .ne-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
+        .ne-table th, .ne-table td { border: 1px solid #cbd5e1; padding: 6px; }
+        .ne-table th { background: #f1f5f9; text-align: left; }
+    </style>
+	<link rel="icon" href="data:,">
+</head>
+<body>
+<header>ROFREICRC v1.0 - GESTÃO INTEGRAL</header>
+<div id="login-sec" style="max-width: 400px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+    <h2 style="text-align: center; color: var(--p); margin-top:0;">Acesso ao Sistema</h2>
+    <label>Utilizador</label>
+    <input type="text" id="log-u" style="margin-bottom: 15px;" onkeydown="if(event.key === 'Enter') doLogin()">
+    <label>Senha</label>
+    <input type="password" id="log-p" style="margin-bottom: 20px;" onkeydown="if(event.key === 'Enter') doLogin()">
+    <button class="btn-main" style="width:100%" onclick="doLogin()">ENTRAR</button>
+</div>
+
+<div id="app" style="display: none;">
+    <nav>
+		<button onclick="showMod('empresa')">Empresa</button>
+        <button id="nav-obras" onclick="showMod('obras')">🏗️ OBRAS</button>
+        <button id="nav-rend" onclick="showMod('rend')">📊 RENDIMENTOS</button>
+		<button id="nav-horas" onclick="showMod('horas')">🕒 HORAS</button>
+        <button id="nav-obs" onclick="showMod('obs')">📝 OBS</button>
+        <button id="nav-ne" onclick="showMod('ne')">📄 N.E.</button>
+        <button id="nav-ped" onclick="showMod('ped')">🛒 PEDIDOS</button>
+        <button id="nav-tar" onclick="showMod('tar')">✅ TAREFAS</button>
+        <button id="nav-notif" onclick="showMod('notif')">🔔 NOTIF</button>
+        <button id="nav-forn" onclick="showMod('forn')">🚚 FORNECEDORES</button>
+        <button id="nav-users" onclick="showMod('users')" style="background:var(--err)">👥 ADMIN</button>
+        <button onclick="logout()" style="background:var(--err); color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">Sair</button>
+    </nav>
+
+    <div class="container">
+        
+        <section id="mod-obras" class="mod-sec">
+            <div class="form-box">
+                <h3>🏗️ Gestão de Obras</h3>
+                <div class="grid">
+                    <div><label>Nº Obra</label><input type="text" id="o-num"></div>
+                    <div><label>Nome da Obra</label><input type="text" id="o-nom"></div>
+                    <div><label>Estado</label><select id="o-est"><option>Em Execução</option><option>Finalizada</option><option>Sem Efeito</option></select></div>
+                </div>
+                <div class="btn-row-form">
+                    <button class="btn-main" onclick="saveRecord('obras')">Gravar Obra</button>
+                    <button id="o-cancel" class="btn-cancel" onclick="cancelarEdit('obras')">Cancelar Edição</button>
+                </div>
+            </div>
+
+            <div class="filter-bar">
+                <button onclick="toggleMass('obras')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">☑️ Seleção Check-list</button>
+                <button onclick="exportarExcel('obras')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">📊 Exportar Excel</button>
+                <input type="text" placeholder="Filtro Nº..." id="filt-o-num" oninput="renderObras()">
+                <input type="text" placeholder="Filtro Nome..." id="filt-o-nom" oninput="renderObras()">
+                <select id="filt-o-est" onchange="renderObras()"><option value="">Todos os Estados</option><option>Em Execução</option><option>Finalizada</option><option>Sem Efeito</option></select>
+            </div>
+            
+            <div id="mass-obras" class="mass-panel">
+                <b>Ações para os selecionados:</b>
+                <button onclick="openMassUpload('obras')" class="actions b-file" style="padding:8px">📁 Anexar aos Selecionados</button>
+                <button onclick="downloadMassFiles('obras')" class="actions b-hist" style="padding:8px">⬇️ Descarregar Documentação Simultânea (ZIP)</button>
+                <button onclick="deleteMassRecords('obras')" class="actions b-del" style="padding:8px">🗑️ Eliminar Selecionados</button>
+            </div>
+
+            <div id="list-obras"></div>
+        </section>
+			<section id="mod-rend" class="mod-sec">
+			            <div class="form-box">
+			                <h3>📊 Registo de Rendimentos</h3>
+			                <div class="grid">
+			                    <div><label>Obra</label><select id="r-obr"></select></div>
+			                    <div class="full-w"><label>Tarefa a desenvolver</label><input type="text" id="r-task" list="lista-task-sug" placeholder="Escreva para pesquisar ou introduza nova tarefa..."></div>
+			                    <div><label>Unidade de Medida</label><input type="text" id="r-unid" placeholder="Ex: m2, ml, kg, un..."></div>
+			                </div>
+                            
+                            <table class="ne-table" style="margin-bottom: 10px;">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Início</th>
+                                        <th>Fim</th>
+                                        <th>Total Horas</th>
+                                        <th>Qtd. Executada</th>
+                                        <th>Utilizador</th>
+                                        <th>Estado</th>
+                                        <th>Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rend-body"></tbody>
+                            </table>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <button onclick="addRendRow()" style="padding:6px 10px; cursor:pointer; background:var(--s); color:white; border:none; border-radius:3px">+ Adicionar Registo</button>
+                                <div style="font-weight: bold; background: #f1f5f9; padding: 8px; border-radius: 4px; border: 1px solid #cbd5e1; font-size: 0.9em;">
+                                    Horas: <span id="rend-tot-horas" style="color:var(--acc);">0.00</span> | 
+                                    Qtd: <span id="rend-tot-qtd" style="color:var(--ok);">0.00</span> | 
+                                    Rendimento: <span id="rend-ratio" style="color:var(--p);">0.00</span> <small>(H/Qtd)</small>
+                                </div>
+                            </div>
+			                <div class="btn-row-form">
+			                    <button class="btn-main" onclick="saveRecord('rend')">Gravar Rendimento</button>
+			                    <button id="r-cancel" class="btn-cancel" onclick="cancelarEdit('rend')">Cancelar Edição</button>
+			                </div>
+			            </div>
+			
+			            <div class="filter-bar">
+			                <button onclick="toggleMass('rend')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">☑️ Seleção Check-list</button>
+			                <button onclick="exportarExcel('rend')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">📊 Excel</button>
+			                <select id="filt-r-obr" onchange="renderRend()"><option value="">Todas as Obras</option></select>
+							<select id="filt-r-mes" onchange="renderRend()"><option value="">Filtrar Mês...</option><option value="01">Jan</option><option value="02">Fev</option><option value="03">Mar</option><option value="04">Abr</option><option value="05">Mai</option><option value="06">Jun</option><option value="07">Jul</option><option value="08">Ago</option><option value="09">Set</option><option value="10">Out</option><option value="11">Nov</option><option value="12">Dez</option></select>
+			                <input type="number" id="filt-r-ano" placeholder="Ano" oninput="renderRend()"> 
+							<input type="text" id="filt-r-user" placeholder="Filtrar Utilizador..." oninput="renderRend()">
+							<input type="text" id="filt-r-task" list="lista-task-sug" placeholder="Filtrar Tarefa..." oninput="renderRend()">
+			                <select id="filt-r-est" onchange="renderRend()"><option value="">Todos os Estados</option><option>Por Aprovar</option><option>Aprobada</option><option>Requiere alteracion</option><option>Sem Efeito</option></select>
+			            </div>
+			            
+			            <div id="mass-rend" class="mass-panel">
+			                 <b>Ações para os selecionados:</b>
+			                <button onclick="openMassUpload('rend')" class="actions b-file" style="padding:8px">📁 Anexar aos Selecionados</button>
+			                <button onclick="downloadMassFiles('rend')" class="actions b-hist" style="padding:8px">⬇️ Descarregar Documentação Simultânea (ZIP)</button>
+			                <button onclick="deleteMassRecords('rend')" class="actions b-del" style="padding:8px">🗑️ Eliminar Selecionados</button>
+			            </div>
+			            <div id="list-rend"></div>
+			        </section>
+        <section id="mod-horas" class="mod-sec">
+            <div class="form-box">
+                <h3>🕒 Registo de Horas</h3>
+                <div class="grid">
+                    <div><label>Data</label><input type="date" id="h-dat"></div>
+					<div><label>Obra</label><select id="h-obr"></select></div>
+					<div><label>Atribuído a</label><select id="h-user"></select></div>
+					<div><label>Início</label><input type="time" id="h-ini"></div>
+                    <div><label>Fim</label><input type="time" id="h-fim"></div>
+                    <div class="full-w"><label>Tarefa</label><textarea id="h-task" rows="2"></textarea></div>
+                    <div><label>Estado</label><select id="h-est" disabled><option>Por Aprovar</option><option>Aprobada</option><option>Requiere alteracion</option><option>Sem Efeito</option></select></div>
+                </div>
+                <div class="btn-row-form">
+                    <button class="btn-main" onclick="saveRecord('horas')">Gravar Horas</button>
+                    <button id="h-cancel" class="btn-cancel" onclick="cancelarEdit('horas')">Cancelar Edição</button>
+                </div>
+            </div>
+
+            <div class="filter-bar">
+                <button onclick="toggleMass('horas')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">☑️ Seleção Check-list</button>
+                <button onclick="exportarExcel('horas')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">📊 Excel</button>
+                <select id="filt-h-obr" onchange="renderHoras()"><option value="">Todas as Obras</option></select>
+				<select id="filt-h-mes" onchange="renderHoras()"><option value="">Filtrar Mês...</option><option value="01">Jan</option><option value="02">Fev</option><option value="03">Mar</option><option value="04">Abr</option><option value="05">Mai</option><option value="06">Jun</option><option value="07">Jul</option><option value="08">Ago</option><option value="09">Set</option><option value="10">Out</option><option value="11">Nov</option><option value="12">Dez</option></select>
+                <input type="number" id="filt-h-ano" placeholder="Ano" oninput="renderHoras()"> <input type="text" id="filt-h-user" placeholder="Filtrar Utilizador..." oninput="renderHoras()">
+                <select id="filt-h-est" onchange="renderHoras()"><option value="">Todos os Estados</option><option>Por Aprovar</option><option>Aprobada</option><option>Requiere alteracion</option><option>Sem Efeito</option></select>
+            </div>
+            
+            <div id="mass-horas" class="mass-panel">
+                 <b>Ações para os selecionados:</b>
+                <button onclick="openMassUpload('horas')" class="actions b-file" style="padding:8px">📁 Anexar aos Selecionados</button>
+                <button onclick="downloadMassFiles('horas')" class="actions b-hist" style="padding:8px">⬇️ Descarregar Documentação Simultânea (ZIP)</button>
+                <button onclick="deleteMassRecords('horas')" class="actions b-del" style="padding:8px">🗑️ Eliminar Selecionados</button>
+            </div>
+            <div id="list-horas"></div>
+        </section>
+
+        <section id="mod-obs" class="mod-sec">
+             <div class="form-box">
+                <h3>📝 Observações</h3>
+                <div class="grid">
+                    <div><label>Obra (Apenas Em Execução)</label><select id="obs-obr"></select></div>
+                    <div class="full-w"><label>Observação</label><textarea id="obs-txt" rows="3"></textarea></div>
+                    <div><label>Estado</label><select id="obs-est"><option>Por Realizar</option><option>Realizada</option><option>Sem Efeito</option></select></div>
+                </div>
+                <div class="btn-row-form">
+                    <button class="btn-main" onclick="saveRecord('obs')">Gravar Observação</button>
+                    <button id="obs-cancel" class="btn-cancel" onclick="cancelarEdit('obs')">Cancelar Edição</button>
+                </div>
+            </div>
+            <div class="filter-bar">
+                <button onclick="toggleMass('obs')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">☑️ Seleção Check-list</button>
+                <button onclick="exportarExcel('obs')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">📊 Excel</button>
+                <select id="filt-obs-obr" onchange="renderObs()"><option value="">Todas as Obras</option></select>
+				<select id="filt-obs-est" onchange="renderObs()"><option value="">Todos os Estados</option><option>Por Realizar</option><option>Realizada</option><option>Sem Efeito</option></select>
+            </div>
+            <div id="mass-obs" class="mass-panel">
+                <button onclick="openMassUpload('obs')" class="actions b-file">📁 Anexar aos Selecionados</button>
+                <button onclick="downloadMassFiles('obs')" class="actions b-hist">⬇️ Descarregar Documentação Simultânea</button>
+                <button onclick="deleteMassRecords('obs')" class="actions b-del">🗑️ Eliminar Selecionados</button>
+            </div>
+            <div id="list-obs"></div>
+        </section>
+
+        <section id="mod-ne" class="mod-sec">
+            <div class="form-box">
+                <h3>📄 Notas de Encomenda</h3>
+                <div class="grid">
+                    <div><label>Nº Encomenda</label><input type="text" id="ne-num" readonly style="background:#f1f5f9"></div>
+                                        <div><label>Obra (Apenas Em Execução)</label><select id="ne-obr"></select></div>
+                    <div><label>Seleccionar Fornecedor *</label><input type="text" id="ne-prov" list="lista-forn-sug" placeholder="Escreva ou selecione..."></div>
+                    <div><label>Estado</label><select id="ne-est"><option>Por Solicitar</option><option>Enviado ao Fornecedor</option><option>Entregue pelo Fornecedor</option><option>Sem Efeito</option></select></div>
+                    <div class="full-w"><label>Condições de Fornecimento | Execução (Local, Data Estimada, etc.)</label><textarea id="ne-cond" rows="2"></textarea></div>
+                </div>
+                
+                <table class="ne-table">
+
+                                        <thead><tr><th>Qtd</th><th>Unid</th><th>Produto / Material</th><th>Preço Un. (€)</th><th>Total (€)</th><th>Ação</th></tr></thead>
+                    <tbody id="ne-body"></tbody>
+                </table>
+                <button onclick="addNERow()" style="margin-top:5px; padding:6px 10px; cursor:pointer; background:var(--s); color:white; border:none; border-radius:3px">+ Adicionar Material</button>
+
+                <div class="btn-row-form">
+                    <button class="btn-main" onclick="saveNE()">Gravar e Gerar PDF</button>
+                    <button id="ne-cancel" class="btn-cancel" onclick="cancelarEdit('ne')">Cancelar Edição</button>
+                </div>
+            </div>
+            
+            <div class="filter-bar">
+                <button onclick="toggleMass('ne')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">☑️ Seleção Check-list</button>
+                <button onclick="exportarExcel('ne')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">📊 Excel</button>
+                <input type="text" id="filt-ne-num" placeholder="Nº" oninput="renderNE()">
+				<select id="filt-ne-obr" onchange="renderNE()"><option value="">Todas as Obras</option></select>
+				<input type="text" id="filt-ne-prov" placeholder="Fornecedor" oninput="renderNE()">
+				<select id="filt-ne-est" onchange="renderNE()">
+				<option value="">Estado</option>
+				<option>Por Solicitar</option>
+				<option>Enviado ao Fornecedor</option>
+				<option>Entregue pelo Fornecedor</option>
+				<option>Sem Efeito</option>
+				</select>
+				<input type="number" id="filt-ne-ano" placeholder="Filtrar Ano..." oninput="renderNE()">
+            </div>
+            <div id="mass-ne" class="mass-panel">
+                <button onclick="openMassUpload('ne')" class="actions b-file">📁 Anexar aos Selecionados</button>
+                <button onclick="downloadMassFiles('ne')" class="actions b-hist">⬇️ Descarregar Documentação Simultânea</button>
+                <button onclick="deleteMassRecords('ne')" class="actions b-del">🗑️ Eliminar Selecionados</button>
+            </div>
+            <div id="list-ne"></div>
+        </section>
+
+        <section id="mod-ped" class="mod-sec">
+            <div class="form-box">
+                <h3>🛒 Pedidos de Materiais</h3>
+                <p style="font-size:11px; color:var(--warn); margin-top:0;">*Os materiais encomendados através das N.E. aparecem aqui automaticamente.</p>
+                <div class="grid">
+                    <div><label>Obra (Apenas Em Execução)</label><select id="ped-obr"></select></div>
+                    <div><label>Fornecedor (Opcional)</label><input type="text" id="ped-prov" list="lista-forn-sug" placeholder="Escreva ou selecione..."></div>
+                    <div><label>Material</label><input type="text" id="ped-mat"></div>
+					<div><label>Nº Nota Encomenda (Opcional)</label><input type="text" id="ped-ne"></div>
+                    <div><label>Quantidade</label><input type="number" id="ped-qtd"></div>
+                    <div><label>Estado</label><select id="ped-est"><option>Por Solicitar</option><option>Enviado ao Fornecedor</option><option>Entregue pelo Fornecedor</option><option>Sem Efeito</option></select></div>
+                    <div><label>Nº Guia (Obrigatório se Entregue)</label><input type="text" id="ped-guia"></div>
+                </div>
+                <div class="btn-row-form">
+                    <button class="btn-main" onclick="saveRecord('ped')">Gravar Pedido</button>
+                    <button id="ped-cancel" class="btn-cancel" onclick="cancelarEdit('ped')">Cancelar Edição</button>
+                </div>
+            </div>
+            <div class="filter-bar">
+                <button onclick="toggleMass('ped')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">☑️ Seleção Check-list</button>
+                <button onclick="exportarExcel('ped')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">📊 Excel</button>
+                <select id="filt-ped-obr" onchange="renderPed()"><option value="">Todas as Obras</option></select>
+				<input type="text" id="filt-ped-prov" placeholder="Fornecedor" oninput="renderPed()">
+				<input type="text" id="filt-ped-ne" placeholder="Nº NE" oninput="renderPed()">
+				<input type="text" id="filt-ped-guia" placeholder="Guia" oninput="renderPed()">
+
+								<select id="filt-ped-est" onchange="renderPed()">
+				    <option value="">Todos os Estados</option>
+				    <option>Por Solicitar</option>
+				    <option>Enviado ao Fornecedor</option>
+				    <option>Entregue pelo Fornecedor</option>
+				    <option>Sem Efeito</option>
+				</select>
+                <select id="filt-ped-mes" onchange="renderPed()" style="border: 2px solid var(--acc);">
+                    <option value="">Todos os Meses (Data Est.)</option>
+                    <option value="01">Janeiro</option><option value="02">Fevereiro</option>
+                    <option value="03">Março</option><option value="04">Abril</option>
+                    <option value="05">Maio</option><option value="06">Junho</option>
+                    <option value="07">Julho</option><option value="08">Agosto</option>
+                    <option value="09">Setembro</option><option value="10">Outubro</option>
+                    <option value="11">Novembro</option><option value="12">Dezembro</option>
+                </select>
+            </div>
+            <div id="mass-ped" class="mass-panel">
+                <button onclick="openMassUpload('ped')" class="actions b-file">📁 Anexar aos Selecionados</button>
+                <button onclick="downloadMassFiles('ped')" class="actions b-hist">⬇️ Descarregar Documentação Simultânea</button>
+                <button onclick="deleteMassRecords('ped')" class="actions b-del">🗑️ Eliminar Selecionados</button>
+                <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #fdba74;">
+                    <label style="display:inline-block; font-size:11px;"><b>📅 Aplicar Data Estimada Massivamente:</b></label>
+                    <input type="date" id="mass-ped-data" style="width:130px; display:inline-block;">
+                    <button onclick="setMassPedData()" class="actions b-note" style="padding:6px; background:var(--acc)">Aplicar Data aos Selecionados</button>
+                </div>
+            </div>
+            <div id="list-ped"></div>
+        </section>
+
+        <section id="mod-tar" class="mod-sec">
+            <div class="form-box">
+                <h3>✅ Tarefas</h3>
+                <div class="grid">
+                    <div><label>Obra (Apenas Em Execução)</label><select id="tar-obr"></select></div>
+                    <div class="full-w"><label>Tarefa a Realizar</label><textarea id="tar-txt" rows="2"></textarea></div>
+                    <div class="full-w"><label>Atribuir a (Selecione vários com Ctrl/Cmd)</label><select id="tar-users" multiple style="height:80px;"></select></div>
+                    <div><label>Estado</label><select id="tar-est"><option>Por Realizar</option><option>Realizada</option><option>Sem Efeito</option></select></div>
+                </div>
+                <div class="btn-row-form">
+                    <button class="btn-main" onclick="saveRecord('tar')">Gravar Tarefa</button>
+                    <button id="tar-cancel" class="btn-cancel" onclick="cancelarEdit('tar')">Cancelar Edição</button>
+                </div>
+            </div>
+            <div class="filter-bar">
+                <button onclick="toggleMass('tar')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">☑️ Seleção Check-list</button>
+                <button onclick="exportarExcel('tar')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">📊 Excel</button>
+                <select id="filt-tar-obr" onchange="renderTar()"><option value="">Todas as Obras</option></select>
+				<select id="filt-tar-est" onchange="renderTar()"><option value="">Todos os Estados</option><option>Por Realizar</option><option>Realizada</option></select>
+            </div>
+            <div id="mass-tar" class="mass-panel">
+                <button onclick="openMassUpload('tar')" class="actions b-file">📁 Anexar aos Selecionados</button>
+                <button onclick="downloadMassFiles('tar')" class="actions b-hist">⬇️ Descarregar Documentação Simultânea</button>
+                <button onclick="deleteMassRecords('tar')" class="actions b-del">🗑️ Eliminar Selecionados</button>
+            </div>
+            <div id="list-tar"></div>
+        </section>
+
+        <section id="mod-notif" class="mod-sec">
+            <div class="form-box" style="border-left: 5px solid var(--warn);">
+                <h3>🔔 Central de Notificações</h3>
+                <p>Verifique as alterações e criações em todos os módulos.</p>
+            </div>
+            <div class="filter-bar">
+                <button onclick="toggleMass('notif')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">☑️ Seleção Check-list</button>
+                <button onclick="markSelectedRead()" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">✔️ Marcar Selecionadas como Lidas</button>
+                <button onclick="deleteMassRecords('notif')" style="background:var(--err); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">🗑️ Eliminar Selecionadas</button>
+                <select id="filt-notif-mod" onchange="renderNotif()">
+                    <option value="">Todos os Módulos</option>
+                    <option value="obras">Obras</option>
+                    <option value="rend">Rendimentos</option>
+					<option value="horas">Horas</option>
+                    <option value="obs">Observações</option>
+                    <option value="ne">N.E.</option>
+                    <option value="ped">Pedidos</option>
+                    <option value="tar">Tarefas</option>
+                    <option value="users">Utilizadores</option>
+					<option value="forn">Fornecedores</option>
+                </select>
+                <select id="filt-notif-est" onchange="renderNotif()"><option value="">Todas</option><option value="Pendente" selected>Pendentes</option><option value="Lida">Lidas</option></select>
+            </div>
+            <div id="list-notif"></div>
+        </section>
+
+        <section id="mod-users" class="mod-sec">
+            <div class="form-box" style="border-left: 5px solid var(--err);">
+                <h3>👥 Gestão de Utilizadores (Restrito a Admin)</h3>
+                <div class="grid">
+                    <div><label>Nome do Utilizador</label><input type="text" id="u-nom"></div>
+                    <div><label>Senha</label><input type="text" id="u-pwd"></div>
+                    <div><label>Credencial</label><select id="u-rol"><option>Utilizador</option><option>Administrador</option></select></div>
+                    <div><label>Estado</label><select id="u-est"><option>Ativo</option><option>Suspenso</option></select></div>
+                </div>
+                <div class="btn-row-form">
+                    <button class="btn-main" onclick="saveRecord('users')" style="background:var(--err)">Gravar Utilizador</button>
+                    <button id="u-cancel" class="btn-cancel" onclick="cancelarEdit('users')">Cancelar Edição</button>
+                </div>
+            </div>
+            <div id="list-users"></div>
+        </section>
+
+        <section id="mod-forn" class="mod-sec">
+            <div class="form-box">
+                <h3>🚚 Base de Dados de Fornecedores</h3>
+                <div class="grid">
+                    <div class="full-w"><label>Nome do Fornecedor *</label><input type="text" id="forn-nome"></div>
+                    <div><label>NIF</label><input type="text" id="forn-nif"></div>
+                    <div><label>Telefone</label><input type="text" id="forn-tel"></div>
+                    <div><label>Telemóvel</label><input type="text" id="forn-telm"></div>
+                    <div><label>E-mail</label><input type="email" id="forn-email"></div>
+					<div class="full-w"><label>Morada</label><input type="text" id="forn-morada"></div>
+					<div><label>Atividade</label><input type="text" id="forn-ativ"></div>
+                </div>
+                <div class="btn-row-form">
+                    <button class="btn-main" onclick="saveForn()">Gravar Fornecedor</button>
+                    <button id="forn-cancel" class="btn-cancel" onclick="cancelarEdit('forn')">Cancelar Edição</button>
+                </div>
+            </div>
+            <div class="filter-bar">
+                <button onclick="exportarExcel('forn')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">📊 Exportar Excel</button>
+                <input type="text" id="filt-forn-nome" placeholder="🔍 Pesquisar por Nome..." oninput="renderForn()">
+				<input type="text" id="filt-forn-ativ" placeholder="🔍 Pesquisar por Atividade..." oninput="renderForn()">
+            </div>
+            <div id="list-forn"></div>
+        </section>
+
+    </div>
+<div id="mod-empresa" class="mod-sec">
+    <div class="form-box">
+        <h3>Dados da Empresa</h3>
+        <div class="grid">
+            <div><label>Nome</label><input id="emp-nome"></div>
+            <div><label>NIF</label><input id="emp-nif"></div>
+            <div class="full-w"><label>Morada</label><input id="emp-morada"></div>
+            <div class="full-w"><label>Website</label><input id="emp-web"></div>
+            <div class="full-w"><label>Logo (Base64)</label><input id="emp-logo"></div>
+        </div>
+        <button class="btn-main" onclick="saveEmpresa()">Guardar</button>
+    </div>
+</div>
+</div>
+
+<div id="modal-hist" class="modal">
+    <div class="modal-content">
+        <h3 style="border-bottom: 2px solid var(--s); padding-bottom: 10px;">📜 Histórico de Edição</h3>
+        <div id="hist-body" style="font-size:11px; margin-top:10px;"></div>
+        <button class="btn-cancel" style="display:block; width:100%; margin-top:20px; padding:10px;" onclick="closeModal('modal-hist')">Fechar Histórico</button>
+    </div>
+</div>
+
+<div id="modal-notas" class="modal">
+    <div class="modal-content">
+        <h3 style="border-bottom: 2px solid var(--warn); padding-bottom: 10px;">📝 Gestão de Notas</h3>
+        <textarea id="nota-texto" style="height: 150px; font-family:inherit; padding:10px;"></textarea>
+        <div style="display:flex; gap:10px; margin-top:15px;">
+            <button class="btn-main" style="flex:2;" onclick="saveNota()">Gravar Nota</button>
+            <button class="btn-cancel" style="display:block; flex:1;" onclick="closeModal('modal-notas')">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-files" class="modal">
+    <div class="modal-content">
+        <h3 style="border-bottom: 2px solid var(--ok); padding-bottom: 10px;">📁 Gestão de Documentação Adjunta</h3>
+        <p style="font-size:11px; color:var(--s);">Pode selecionar vários ficheiros em simultâneo. Tamanho máx recomendado: 2MB por ficheiro.</p>
+        
+        <div style="background:#f8fafc; padding:15px; border:1px dashed #cbd5e1; text-align:center; border-radius:4px;">
+            <input type="file" id="file-input" multiple onchange="handleFileUpload(event)" style="display:none;">
+            <button onclick="document.getElementById('file-input').click()" style="background:var(--acc); color:white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">➕ Adicionar Ficheiros / Fotos</button>
+        </div>
+        
+        <div id="file-list" style="margin-top:15px; max-height: 200px; overflow-y:auto;"></div>
+
+		<div id="upload-progress" style="margin-top:10px; display:none;">
+    		<div style="background:#e2e8f0; border-radius:4px; overflow:hidden;">
+       			<div id="upload-bar" style="height:10px; width:0%; background:var(--acc);"></div>
+   			</div>
+ 			<div id="upload-text" style="font-size:11px; margin-top:5px;"></div>
+		</div>
+        
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn-main" style="flex:2; background:var(--s);" onclick="downloadCurrentFiles()">⬇️ Descarregar Toda a Documentação (ZIP)</button>
+            <button class="btn-cancel" style="display:block; flex:1;" onclick="closeModal('modal-files')">Fechar</button>
+        </div>
+    </div>
+</div>
+<script>
+// --- CONFIGURACIÓN DE FIREBASE ---
+const firebaseConfig = {
+    apiKey: "AIzaSyCBkWCoWX0oN1HWCA6aGt_kdg_2vyFz1mM",
+    authDomain: "rofreicrc-175f9.firebaseapp.com",
+    databaseURL: "https://rofreicrc-175f9-default-rtdb.firebaseio.com",
+    projectId: "rofreicrc-175f9",
+    appId: "1:597226985528:web:c371ca51032301e51feecd"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// VARIABLES GLOBALES
+let DB = { obras:[], rend:[], horas:[], ne:[], ped:[], tar:[], obs:[], users:[], notif:[], hist:{}, forn:[], empresa:{} };
+let user = null; 
+let currentMod = 'obras'; 
+let editingId = null; 
+let activeNotaId = null; 
+let activeFileId = null;
+let massMode = false;
+
+// --- LOGIN Y SEGURIDAD ---
+async function doLogin() {
+    // Corregimos los IDs para que coincidan con el HTML (user-input y pass-input)
+    const uEl = document.getElementById('log-u');
+	const pEl = document.getElementById('log-p');
+
+    if (!uEl || !pEl) {
+        console.error("Error: No se encontraron los campos de login en el HTML.");
+        return;
+    }
+
+    const u = uEl.value;
+    const p = pEl.value;
+
+    // Login Admin
+    if(u === 'admin' && p === '23778478') {
+        user = { 
+    		u: 'admin',
+    		n: 'Administrador', 
+    		role: 'Administrador' 
+		};
+    } else {
+        const found = DB.users.find(x => x.u === u && x.p === p);
+        if(found) user = found;
+    }
+
+    if(user) {
+        document.getElementById('login-sec').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        
+        if (user.role !== 'Administrador') {
+            document.getElementById('nav-users').style.display = 'none';
+        } else {
+            document.getElementById('nav-users').style.display = 'block';
+        }
+        
+        // Actualizamos el nome do utilizador arriba
+        const userInfo = document.getElementById('user-info');
+		if(userInfo) userInfo.innerText = `👤 ${user.n} (${user.role})`;
+        
+        showMod('obras'); 
+        renderAll();
+    } else {
+        alert("Credenciais inválidas.");
+    }
+}
+
+// Optimização de Renderização para evitar bloqueios ao carregar
+let syncTimeout;
+function triggerRender() {
+    clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => {
+        updateSelects();
+        if (user) renderAll();
+    }, 300);
+}
+
+// Sincronización en Tiempo Real (Optimizada para Base64 e Bandwidth)
+function sync() {
+    const modules = ['obras', 'rend', 'horas', 'ne', 'ped', 'tar', 'obs', 'users', 'notif', 'forn'];
+    
+    modules.forEach(mod => {
+        db.ref(mod).on('child_added', snap => {
+            if (!DB[mod].find(x => x.id === snap.key)) DB[mod].push(snap.val());
+            triggerRender();
+        });
+        db.ref(mod).on('child_changed', snap => {
+            const index = DB[mod].findIndex(x => x.id === snap.key);
+            if (index !== -1) DB[mod][index] = snap.val();
+            triggerRender();
+        });
+		db.ref('files').on('child_added', snap => {
+    	console.log("Files cargados para ID:", snap.key);
+		});
+        db.ref(mod).on('child_removed', snap => {
+            DB[mod] = DB[mod].filter(x => x.id !== snap.key);
+            triggerRender();
+        });
+    });
+
+    // El histórico ya no se sincroniza aquí para ahorrar ancho de banda
+
+    // Empresa é um objeto único, mantemos on('value')
+    db.ref('empresa').on('value', snap => {
+        DB.empresa = snap.val() || {};
+        triggerRender();
+    });
+
+    // Verificação do Admin corre apenas uma vez ('once') na inicialização
+    db.ref('users').once('value', snap => {
+        if (!snap.exists() || Object.keys(snap.val() || {}).length === 0) {
+            const adminId = 'ADMIN_DEFAULT';
+            db.ref(`users/${adminId}`).set({
+                id: adminId, u: 'admin', p: '23778478', role: 'Administrador', st: 'Ativo'
+            });
+        }
+    });
+
+	db.ref('hist').on('child_added', snap => {
+    DB.hist[snap.key] = snap.val();
+});
+}
+	
+	
+function showMod(mod) {
+    currentMod = mod;
+    massMode = false;
+    
+    document.querySelectorAll('.mod-sec').forEach(s => {
+        s.style.display = 'none';
+        s.classList.remove('mass-mode');
+    });
+    
+    document.querySelectorAll('.mass-panel').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+
+    // 1. Mostrar la sección si existe
+    const section = document.getElementById(`mod-${mod}`);
+    if (section) section.style.display = 'block';
+
+    // 2. Activar botón de nav solo si tiene el ID correspondiente
+    const navBtn = document.getElementById(`nav-${mod}`);
+    if (navBtn) navBtn.classList.add('active');
+
+    cancelarEdit(mod);
+}
+
+// --- LÓGICA TABELA RENDIMENTOS ---
+function addRendRow(val = { d:'', i:'', f:'', h:'0.00', q:'0.00', u:[], e:'Por Aprovar' }) {
+    const tbody = document.getElementById('rend-body');
+    const tr = document.createElement('tr');
+    const rid = `rendr_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+    tr.id = rid;
+    
+    const userOpts = DB.users.map(usr => `<option value="${usr.u}" ${(val.u || []).includes(usr.u) ? 'selected' : ''}>${usr.u}</option>`).join('');
+    
+    tr.innerHTML = `
+        <td><input type="date" class="rr-dat" value="${val.d}"></td>
+        <td><input type="time" class="rr-ini" value="${val.i}" oninput="calcRendRow('${rid}')"></td>
+        <td><input type="time" class="rr-fim" value="${val.f}" oninput="calcRendRow('${rid}')"></td>
+        <td><input type="text" class="rr-hor" value="${val.h}" readonly style="background:#f1f5f9; width:60px;"></td>
+        <td><input type="number" step="0.01" class="rr-qtd" value="${val.q}" oninput="calcRendTotals()" style="width:70px;"></td>
+        <td><select class="rr-usr">${userOpts}</select></td>
+        <td><select class="rr-est"><option ${val.e==='Por Aprovar'?'selected':''}>Por Aprovar</option><option ${val.e==='Aprobada'?'selected':''}>Aprobada</option><option ${val.e==='Requiere alteracion'?'selected':''}>Requiere alteracion</option><option ${val.e==='Sem Efeito'?'selected':''}>Sem Efeito</option></select></td>
+        <td><button onclick="this.parentElement.parentElement.remove(); calcRendTotals();" style="color:red; border:none; background:none; cursor:pointer;">✖</button></td>`;
+    tbody.appendChild(tr);
+    calcRendTotals();
+}
+
+function calcRendRow(rowId) {
+    const row = document.getElementById(rowId);
+    const ini = row.querySelector('.rr-ini').value;
+    const fim = row.querySelector('.rr-fim').value;
+    let horas = "0.00";
+    if(ini && fim){
+        const hIni = new Date(`1970-01-01T${ini}`);
+        const hFim = new Date(`1970-01-01T${fim}`);
+        let diff = (hFim - hIni) / (1000 * 60 * 60);
+        if(ini <= "12:00" && fim >= "13:00") diff -= 1;
+        horas = Math.max(0, diff).toFixed(2);
+    }
+    row.querySelector('.rr-hor').value = horas;
+    calcRendTotals();
+}
+
+function calcRendTotals() {
+    let totH = 0, totQ = 0;
+    document.querySelectorAll('#rend-body tr').forEach(tr => {
+        totH += parseFloat(tr.querySelector('.rr-hor').value) || 0;
+        totQ += parseFloat(tr.querySelector('.rr-qtd').value) || 0;
+    });
+    const elH = document.getElementById('rend-tot-horas');
+    const elQ = document.getElementById('rend-tot-qtd');
+    const elR = document.getElementById('rend-ratio');
+    if(elH) elH.innerText = totH.toFixed(2);
+    if(elQ) elQ.innerText = totQ.toFixed(2);
+    if(elR) {
+        const ratio = totQ > 0 ? (totH / totQ) : 0;
+        elR.innerText = ratio.toFixed(2);
+    }
+}
+
+// --- MOTOR DE GUARDADO Y AUDITORÍA ---
+async function saveRecord(mod) {
+    // REQUISITO: ID Único Permanente (Timestamp + Random)
+    const id = editingId || `ID_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+    const isNew = !editingId;
+    const old = isNew ? null : DB[mod].find(x => x.id === id);
+
+    let data = {
+        id,
+        u_crea: isNew ? user.u : old.u_crea,
+        d_crea: isNew ? new Date().toLocaleString() : old.d_crea,
+        u_edit: user.u,
+        d_edit: new Date().toLocaleString(),
+        notas: old ? old.notas || '' : ''
+    };
+
+    // Mapeo dinámico según el módulo
+    if(mod === 'obras') {
+        data.num = document.getElementById('o-num').value;
+        data.nom = document.getElementById('o-nom').value;
+        data.est = document.getElementById('o-est').value;
+    } else if(mod === 'horas') {
+        const sel = document.getElementById('h-obr');
+        data.dat = document.getElementById('h-dat').value;
+        data.obrId = sel.value;
+        data.obrNom = sel.options[sel.selectedIndex].text;
+        data.ini = document.getElementById('h-ini').value;
+        data.fim = document.getElementById('h-fim').value;
+		data.task = document.getElementById('h-task').value;
+		data.assigned = document.getElementById('h-user').value;
+
+		// NUEVO
+		const ini = document.getElementById('h-ini').value;
+		const fim = document.getElementById('h-fim').value;
+
+		if(ini && fim){
+    		const hIni = new Date(`1970-01-01T${ini}`);
+    		const hFim = new Date(`1970-01-01T${fim}`);
+    		let diff = (hFim - hIni) / (1000 * 60 * 60);
+    		if(ini <= "12:00" && fim >= "13:00") diff -= 1;
+    		data.horas = Math.max(0, diff).toFixed(2);
+		} else {
+    		data.horas = "0.00";
+		}
+
+		data.est = isNew ? 'Por Aprovar' : document.getElementById('h-est').value;
+
+
+	} else if(mod === 'rend') {
+    const sel = document.getElementById('r-obr');
+    data.obrId = sel.value;
+    data.obrNom = sel.options[sel.selectedIndex].text;
+    data.task = document.getElementById('r-task').value;
+    data.unid = document.getElementById('r-unid').value;
+    
+    let items = [];
+    document.querySelectorAll('#rend-body tr').forEach(tr => {
+        const usersSel = tr.querySelector('.rr-usr');
+        items.push({
+            d: tr.querySelector('.rr-dat').value,
+            i: tr.querySelector('.rr-ini').value,
+            f: tr.querySelector('.rr-fim').value,
+            h: tr.querySelector('.rr-hor').value,
+            q: tr.querySelector('.rr-qtd').value,
+            u: Array.from(usersSel.selectedOptions).map(o => o.value),
+            e: tr.querySelector('.rr-est').value
+        });
+    });
+    data.items = items;
+    data.totHoras = document.getElementById('rend-tot-horas').innerText;
+    data.totQtd = document.getElementById('rend-tot-qtd').innerText;
+    data.ratio = document.getElementById('rend-ratio').innerText;
+    data.est = "Registo Múltiplo"; 
+
+} else if(mod === 'obs') {
+        const sel = document.getElementById('obs-obr');
+        data.obrId = sel.value;
+        data.obrNom = sel.options[sel.selectedIndex].text;
+        data.txt = document.getElementById('obs-txt').value;
+        data.est = document.getElementById('obs-est').value;
+    } else if(mod === 'ped') {
+        const sel = document.getElementById('ped-obr');
+        data.obrId = sel.value;
+        data.obrNom = sel.options[sel.selectedIndex].text;
+        data.prov = document.getElementById('ped-prov').value;
+        data.mat = document.getElementById('ped-mat').value;
+        data.qtd = document.getElementById('ped-qtd').value;
+        data.est = document.getElementById('ped-est').value;
+        data.guia = document.getElementById('ped-guia').value;
+		data.neNum = document.getElementById('ped-ne').value || '';
+        // Validación: Guía obligatoria si está entregado
+        if(data.est === 'Entregue pelo Fornecedor' && !data.guia) {
+            alert("O número da guia é obrigatório para o estado 'Entregue'.");
+            return;
+        }
+    } else if(mod === 'tar') {
+        const selO = document.getElementById('tar-obr');
+        const selU = document.getElementById('tar-users');
+        data.obrId = selO.value;
+        data.obrNom = selO.options[selO.selectedIndex].text;
+        data.txt = document.getElementById('tar-txt').value;
+        data.assigned = Array.from(selU.selectedOptions).map(o => o.value);
+        data.est = document.getElementById('tar-est').value;
+    } else if(mod === 'users') {
+        data.u = document.getElementById('u-nom').value;
+        data.p = document.getElementById('u-pwd').value;
+        data.role = document.getElementById('u-rol').value;
+        data.st = document.getElementById('u-est').value;
+    }
+
+    // Generar Historial de Cambios (Auditoría)
+    const log = generateDiff(old, data);
+    
+    await db.ref(`${mod}/${id}`).set(data)
+	.catch(err => console.error("Firebase error:", err));
+
+	// GUARDAR FILES EN NODO SEPARADO
+	if(data.files && data.files.length){
+    	await db.ref(`files/${id}`).set(data.files);
+	}
+    if(log) await db.ref(`hist/${id}`).push({ u: user.u, ts: data.d_edit, log, d_crea: data.d_crea });
+    
+        // Crear Notificación para creaciones y alteraciones (con nombre descriptivo)
+    let detalhesNotif = "";
+    if(mod === 'obras') detalhesNotif = `Obra Nº: ${data.num} | Nome: ${data.nom} | Estado: ${data.est}`;
+    else if(mod === 'rend') detalhesNotif = `Obra: ${data.obrNom} | Data: ${data.dat} | Tarefa: ${data.task} | Horário: ${data.ini} - ${data.fim}`;
+	else if(mod === 'horas') detalhesNotif = `Obra: ${data.obrNom} | Data: ${data.dat} | Tarefa: ${data.task} | Horário: ${data.ini} - ${data.fim}`;
+    else if(mod === 'obs') detalhesNotif = `Obra: ${data.obrNom} | Obs: ${data.txt} | Estado: ${data.est}`;
+    else if(mod === 'ped') detalhesNotif = `Obra: ${data.obrNom} | Mat: ${data.mat} | Qtd: ${data.qtd} | Fornecedor: ${data.prov || 'N/A'}`;
+    else if(mod === 'tar') detalhesNotif = `Obra: ${data.obrNom} | Tarefa: ${data.txt} | Atribuído a: ${(data.assigned || []).join(', ')} | Estado: ${data.est}`;
+    else if(mod === 'users') detalhesNotif = `Utilizador: ${data.u} | Perfil: ${data.role} | Estado: ${data.st}`;
+    else detalhesNotif = data.num || data.obrNom || data.mat || data.id;
+
+    const acaoTexto = isNew ? "Criado" : "Alterado";
+    createNotif(mod, `[${mod.toUpperCase()} - ${acaoTexto}] ${detalhesNotif}`);
+
+    alert("Guardado com sucesso!");
+    cancelarEdit(mod);
+}
+
+
+function generateDiff(oldData, newData) {
+    if(!oldData) return "<b>Criação inicial do registo.</b>";
+    let diffs = [];
+    // Ignoramos campos técnicos para que no saturen el historial
+    const ignore = ['d_edit', 'u_edit', 'files', 'notas', 'd_crea', 'u_crea', 'id', 'items'];
+    
+    for(let k in newData) {
+        if(ignore.includes(k)) continue;
+        
+        let oldVal = oldData[k] || "Vazio";
+        let newVal = newData[k] || "Vazio";
+        
+        if(JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+            diffs.push(`Alteração em <b>${k}</b>: <span style="color:red">"${oldVal}"</span> ➔ <span style="color:green">"${newVal}"</span>`);
+        }
+    }
+    return diffs.length > 0 ? diffs.join("<br>") : null;
+}
+
+// --- LÓGICA ESPECÍFICA N.E. ---
+let neRowIdx = 0;
+function addNERow(val = { q:'', u:'', p:'', pr:'', t:'' }) {
+    const tbody = document.getElementById('ne-body');
+    const tr = document.createElement('tr');
+    const rid = `ner_${Date.now()}_${Math.random()}`;
+    tr.id = rid;
+    tr.innerHTML = `
+        <td><input type="number" class="ne-q" value="${val.q}" oninput="calcNETotal('${rid}')"></td>
+        <td><input type="text" class="ne-u" value="${val.u}"></td>
+        <td><input type="text" class="ne-p" value="${val.p}"></td>
+        <td><input type="number" class="ne-pr" value="${val.pr}" oninput="calcNETotal('${rid}')"></td>
+        <td><input type="number" class="ne-t" value="${val.t}" readonly></td>
+        <td><button onclick="this.parentElement.parentElement.remove()" style="color:red">✖</button></td>`;
+    tbody.appendChild(tr);
+}
+
+function calcNETotal(rowId) {
+    const row = document.getElementById(rowId);
+    const q = row.querySelector('.ne-q').value || 0;
+    const pr = row.querySelector('.ne-pr').value || 0;
+    row.querySelector('.ne-t').value = (q * pr).toFixed(2);
+}
+
+async function saveNE() {
+    const id = editingId || `NE_${Date.now()}`;
+    let num = document.getElementById('ne-num').value;
+    const obrSel = document.getElementById('ne-obr');
+    const provNome = document.getElementById('ne-prov').value.trim();
+    
+    if(!editingId) {
+        const currentYear = new Date().getFullYear().toString();
+        const nesThisYear = DB.ne.filter(n => n.num && n.num.includes('.' + currentYear));
+        let maxNum = 0;
+        nesThisYear.forEach(n => {
+            const parts = n.num.split('.');
+            if(parts.length > 0) {
+                const numPart = parseInt(parts[0].replace('NE', ''), 10);
+                if(!isNaN(numPart) && numPart > maxNum) maxNum = numPart;
+            }
+        });
+        const novoNum = `NE${String(maxNum + 1).padStart(3, '0')}.${currentYear}`;
+        if(num !== novoNum) num = novoNum;
+        document.getElementById('ne-num').value = num;
+    }
+    
+    if(!obrSel.value || !provNome) return alert("Obra e Fornecedor são obrigatórios!");
+
+    const old = DB.ne.find(x => x.id === id);
+    const novoEst = document.getElementById('ne-est').value;
+    
+    if (old && old.est !== novoEst) {
+        if (!confirm("Atenção: A alteração de estado desta nota de encomienda modificará automaticamente o estado dos pedidos de materiais vigentes associados (excluindo os anulados por retificação). Deseja continuar?")) return;
+    }
+
+    let fData = DB.forn.find(f => f.nome.toLowerCase() === provNome.toLowerCase());
+
+	let items = [];
+        document.querySelectorAll('#ne-body tr').forEach(tr => {
+            const q = tr.querySelector('.ne-q').value;
+            const p = tr.querySelector('.ne-p').value;
+            if(q && p) {
+                items.push({
+                    q: q,
+                    u: tr.querySelector('.ne-u').value,
+                    p: p,
+                    pr: tr.querySelector('.ne-pr').value,
+                    t: tr.querySelector('.ne-t').value
+                });
+            }
+        });
+        const condText = document.getElementById('ne-cond').value;
+
+        let incrementaVersion = false;
+        if (old) {
+            function normalizarItems(arr) {
+                return (arr || []).map(i => ({
+                    q: Number(i.q),
+                    u: (i.u || '').trim(),
+                    p: (i.p || '').trim(),
+                    pr: Number(i.pr),
+                    t: Number(i.t)
+                }));
+            }
+            const oldItemsNorm = normalizarItems(old.items);
+            const newItemsNorm = normalizarItems(items);
+            const oldItemsStr = JSON.stringify(oldItemsNorm);
+            const newItemsStr = JSON.stringify(newItemsNorm);
+            const oldCond = (old.cond || '').trim();
+            const newCond = (condText || '').trim();
+
+            if (oldItemsStr !== newItemsStr || oldCond !== newCond || old.prov !== provNome || old.obrId !== obrSel.value) {
+                incrementaVersion = true;
+            }
+        }
+
+        const skipPrompts = (old && !incrementaVersion);
+
+    	// 🔥 NUEVO: Reutilizar proveedor si ya existe el registro y solo cambia estado
+    	if(!fData && skipPrompts) {
+        	fData = {
+            	nome: old.prov,
+            	nif: old.nif,
+            	morada: old.morada,
+            	tel: old.tel,
+            	telm: old.telm,
+            	email: old.email
+        	};
+    	}
+
+    	if(!fData && !skipPrompts) {
+        	const confirmar = confirm(`O fornecedor "${provNome}" não existe. Deseja registrá-lo na base de dados?`);
+
+        	if(!confirmar){
+        		const nif = prompt("NIF:") || "";
+        		const morada = prompt("Morada:") || "";
+        		const tel = prompt("Telefone:") || "";
+        		const telm = prompt("Telemóvel:") || "";
+        		const email = prompt("E-mail:") || "";
+        		fData = { nome: provNome, nif, morada, tel, telm, email };
+    		} else {
+                const nif = prompt("NIF:") || "";
+                const morada = prompt("Morada:") || "";
+                const tel = prompt("Telefone:") || "";
+                const telm = prompt("Telemóvel:") || "";
+                const email = prompt("E-mail:") || "";
+                const fornId = `FORN_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+                fData = { id: fornId, nome: provNome, nif, morada, tel, telm, email, atividade: "", d_crea: new Date().toLocaleString(), u_crea: user.u || user.n, d_edit: new Date().toLocaleString(), u_edit: user.u || user.n };
+                await db.ref(`forn/${fornId}`).set(fData);
+    		}
+    	}
+
+        let contatoNome = "---";
+        if (skipPrompts) {
+            contatoNome = old.contatoNome || "---";
+        } else {
+            contatoNome = prompt("Nome da pessoa de contacto que representa o fornecedor:") || "---";
+        }
+
+    const version = old && old.version !== undefined ? (incrementaVersion ? old.version + 1 : old.version) : 0;
+    const numWithVersion = `${num}.V${version}`;
+    const nombreReferencia = `${numWithVersion}.${fData.nome || provNome}`;
+
+    // La actualización de estado de los pedidos se hará más abajo
+    const data = {
+    	id, num, version, obrId: obrSel.value,
+    	contatoNome,
+    	obrNom: obrSel.options[obrSel.selectedIndex].text,
+    	prov: provNome, fornId: fData.id || null,
+
+    	// 🔥 NUEVO: guardar datos del proveedor
+    	nif: fData.nif || '',
+    	morada: fData.morada || '',
+    	tel: fData.tel || '',
+    	telm: fData.telm || '',
+    	email: fData.email || '',
+        est: document.getElementById('ne-est').value,
+        cond: condText, notas: condText, items,
+        u_edit: user.u || user.n, d_edit: new Date().toLocaleString(),
+        d_crea: old ? old.d_crea : new Date().toLocaleString(),
+        u_crea: old ? old.u_crea : (user.u || user.n)
+    };
+
+    // --- GENERACIÓN DEL PDF ---
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const emp = DB.empresa || {};
+
+    // Encabezado básico
+    if (emp.logo) { try { const props = doc.getImageProperties(emp.logo); const ratio = props.width / props.height; let w = 80; let h = w / ratio; if(h > 40){ h = 40; w = h * ratio; } doc.addImage(emp.logo, 'PNG', 10, 10, w, h); } catch (e) {} }
+    doc.setFontSize(14).setFont(undefined, 'bold').text("NOTA DE ENCOMENDA", 200, 15, { align: "right" });
+    doc.setFontSize(10).setFont(undefined, 'normal').text(`Nº: ${numWithVersion}`, 200, 20, { align: "right" });
+
+
+    // 1. Datos del Fornecedor (REQUERIMIENTO 1: Tamaño más pequeño)
+    doc.setFontSize(8); 
+    if (fData.nome) {
+        doc.setFont(undefined, 'bold').text("FORNECEDOR | EMPREITEIRO:", 10, 48);
+        doc.setFont(undefined, 'normal');
+        doc.text(`Nome: ${fData.nome}`, 10, 53);
+        doc.text(`NIF: ${fData.nif || '---'}`, 10, 58);
+        doc.text(`Morada: ${fData.morada || '---'}`, 10, 63);
+        doc.text(`Contacto: ${contatoNome}`, 100, 53);
+        doc.text(`Tel: ${fData.tel || '---'} / Telm: ${fData.telm || '---'}`, 100, 58);
+        doc.text(`E-mail: ${fData.email || '---'}`, 100, 63);
+    } else {
+        doc.text(`Nome: ${provNome}`, 10, 53);
+        doc.text(`Contacto: ${data.contatoNome}`, 100, 53);
+    }
+	
+	// Datos de la obra
+    doc.setFontSize(10).setFont(undefined, 'bold').text(`OBRA: ${data.obrNom}`, 10, 38);
+
+	// Línea horizontal de separación Bajo los datos de la obra
+            doc.setDrawColor(200).setLineWidth(0.1);
+            doc.line(10, 43, 200, 43);
+
+    // Cálculos de Tabla
+    const totalSuma = items.reduce((acc, item) => acc + Number(item.t || 0), 0);
+    const tableData = items.map(i => [i.q, i.u, i.p, `€ ${Number(i.pr).toFixed(2)}`, `€ ${Number(i.t).toFixed(2)}`]);
+
+    doc.autoTable({
+        head: [['Qtd','Un','Produto / Material','Preço Un.','Total']],
+        body: tableData,
+        startY: 70,
+        theme: 'striped',
+        headStyles: { fillGray: [15, 23, 42] },
+        columnStyles: { 4: { halign: 'right' } },
+        didDrawPage: function (d) {
+            let finalY = d.cursor.y;
+
+            // REQUERIMIENTO 4: Línea, total en negrita formato moneda y texto IVA
+            doc.setDrawColor(0).setLineWidth(0.5);
+            doc.line(160, finalY + 2, 200, finalY + 2); 
+            doc.setFontSize(10).setFont(undefined, 'bold');
+            doc.text(`TOTAL: € ${totalSuma.toLocaleString('pt-PT', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 200, finalY + 8, { align: 'right' });
+            
+            doc.setFontSize(8).setFont(undefined, 'italic').setFont(undefined, 'normal');
+            doc.text("Aos valores indicados deve-se acrescentar o IVA à taxa em vigor.", 200, finalY + 13, { align: 'right' });
+
+            // REQUERIMIENTO 5: Línea horizontal de separación
+            doc.setDrawColor(200).setLineWidth(0.1);
+            doc.line(10, finalY + 18, 200, finalY + 18);
+
+            // REQUERIMIENTO 2: Condiciones de entrega debajo de la tabla (Tamaño mayor)
+            doc.setFontSize(11).setFont(undefined, 'bold');
+            doc.text("CONDIÇÕES DE FORNECIMENTO | EXECUÇÃO:", 10, finalY + 25);
+            doc.setFontSize(10).setFont(undefined, 'normal');
+            const splitCond = doc.splitTextToSize(condText || 'N/A', 180);
+            doc.text(splitCond, 10, finalY + 31);
+        }
+    });
+
+    // REQUERIMIENTO 3: Datos de quien generó al rodapié (una línea arriba de la web)
+    const pageCount = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        const footerY = 285;
+        doc.setFontSize(9).setFont(undefined, 'bold').setTextColor(37, 99, 235);
+        doc.text(`Documento gerado por: ${data.u_crea} em ${data.d_crea}`, 105, footerY - 5, { align: "center" });
+        doc.setFontSize(8).setFont(undefined, 'normal').setTextColor(100);
+        doc.text(emp.web || '', 105, footerY, { align: "center" });
+    }
+
+    // Guardar en Firebase
+    data.files = old && old.files ? [...old.files] : [];
+
+	if (!old || incrementaVersion) {
+    	const pdfBase64 = doc.output('datauristring');
+    	const pdfFile = { n: `${nombreReferencia}.pdf`, d: pdfBase64 };
+    	data.files.push(pdfFile);
+	}
+    
+    await db.ref(`ne/${id}`).set(data);
+    createNotif('ne', `[NE - ${old ? 'Alterada' : 'Criada'}] Nº: ${numWithVersion} | Obra: ${data.obrNom} | Forn: ${data.prov} | Total Itens: ${items.length} | Est: ${data.est}`);
+    
+    let novoPedEst = data.est;
+
+    if (!old || incrementaVersion) {
+        // Si es nueva o si hubo cambios en materiales, invalidamos lo anterior y creamos lo nuevo
+        if (old) {
+            const oldPeds = DB.ped.filter(p => p.neId === id);
+            for(let op of oldPeds) {
+                await db.ref(`ped/${op.id}/est`).set('Sem Efeito');
+            }
+        }
+        for(let it of items) {
+            const pedId = `PED_${Date.now()}_${Math.floor(Math.random() * 1000 + items.indexOf(it))}`;
+            await db.ref(`ped/${pedId}`).set({
+                id: pedId, obrId: data.obrId, obrNom: data.obrNom, prov: data.prov,
+                mat: it.p, qtd: it.q, neNum: numWithVersion, neId: id,
+                est: novoPedEst, u_crea: data.u_crea, d_crea: data.d_crea, notas: condText
+            });
+        }
+    } else {
+        // Si NO hubo cambios en materiales (solo cambio de estado), actualizamos los pedidos activos
+        const pedsAtivos = DB.ped.filter(p => p.neId === id && p.est !== 'Sem Efeito');
+        for(let p of pedsAtivos) {
+            await db.ref(`ped/${p.id}/est`).set(novoPedEst);
+        }
+    }
+
+    alert("N.E. Guardada e PDF Gerado!");
+    cancelarEdit('ne');
+    renderNE();
+}
+
+function populateObraFilter(selectId, modData) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const currentVal = sel.value; 
+    sel.innerHTML = '<option value="">Todas as Obras</option>'; 
+    
+    let obrasValidas = new Set();
+    if (modData && modData.length > 0) {
+        modData.forEach(item => {
+            if (item.obrNom) obrasValidas.add(item.obrNom);
+        });
+    }
+
+    if (DB.obras) {
+        let sortedObras = [...DB.obras].sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+        sortedObras.forEach(o => {
+            const textoCompleto = `${o.num} - ${o.nom}`;
+            if (!modData || obrasValidas.has(textoCompleto)) {
+                sel.innerHTML += `<option value="${textoCompleto}">${textoCompleto}</option>`;
+            }
+        });
+    }
+    sel.value = currentVal; 
+}
+	
+// --- MOTOR DE RENDERIZADO GENERAL ---
+function renderAll() {
+    if(!user) return;
+    
+    // CARGAR LOS DADOS DA EMPRESA VISUALMENTE
+    try { 
+        const emp = DB.empresa || {};
+        if(document.getElementById('emp-nome')) document.getElementById('emp-nome').value = emp.nome || '';
+        if(document.getElementById('emp-nif')) document.getElementById('emp-nif').value = emp.nif || '';
+        if(document.getElementById('emp-morada')) document.getElementById('emp-morada').value = emp.morada || '';
+        if(document.getElementById('emp-web')) document.getElementById('emp-web').value = emp.web || '';
+        if(document.getElementById('emp-logo')) document.getElementById('emp-logo').value = emp.logo || '';
+    } catch(e) { console.error("Erro Empresa:", e); }
+
+    // Llenar filtros antes de renderizar las listas
+    populateObraFilter('filt-h-obr', DB.horas);
+    populateObraFilter('filt-r-obr', DB.rend);
+    populateObraFilter('filt-obs-obr', DB.obs);
+    populateObraFilter('filt-ne-obr', DB.ne);
+    populateObraFilter('filt-ped-obr', DB.ped);
+    populateObraFilter('filt-tar-obr', DB.tar);
+    try { renderObras(); } catch(e) { console.error("Erro Obras:", e); }
+	try { renderRend(); } catch(e) { console.error("Erro Rend:", e); }
+    try { renderHoras(); } catch(e) { console.error("Erro Horas:", e); }
+    try { renderObs(); } catch(e) { console.error("Erro Obs:", e); }
+    try { renderNE(); } catch(e) { console.error("Erro NE:", e); }
+    try { renderPed(); } catch(e) { console.error("Erro Ped:", e); }
+    try { renderTar(); } catch(e) { console.error("Erro Tasks:", e); }
+    try { renderNotif(); } catch(e) { console.error("Erro Notif:", e); }
+	try { renderUsers(); } catch(e) { console.error("Erro Users:", e); }
+    try { renderForn(); } catch(e) { console.error("Erro Forn:", e); }
+}
+
+
+
+// Ejemplo: Render Obras con Filtro por Celda (Requisito)
+function renderObras() {
+    const list = document.getElementById('list-obras'); list.innerHTML = '';
+    const fNum = document.getElementById('filt-o-num').value.toLowerCase();
+    const fNom = document.getElementById('filt-o-nom').value.toLowerCase();
+    const fEst = document.getElementById('filt-o-est').value;
+
+    let data = DB.obras.filter(o => 
+        (o.num || '').toString().toLowerCase().includes(fNum) &&
+        (o.nom || '').toString().toLowerCase().includes(fNom) &&
+        (fEst === '' || o.est === fEst)
+    );
+
+    data.forEach(o => {
+        list.innerHTML += `
+            <div class="card">
+                <input type="checkbox" class="chk-mass" value="${o.id}">
+                <div class="card-grid">
+                    <div><b>Nº Obra:</b> ${o.num}</div>
+                    <div><b>Nome:</b> ${o.nom}</div>
+                    <div style="color:${o.est==='Em Execução'?'green':'red'}"><b>Estado:</b> ${o.est}</div>
+                </div>
+                <div class="meta">
+                    <span>Criado: ${o.d_crea} por ${o.u_crea}</span>
+                    <span>Modificado: ${o.d_edit}</span>
+                </div>
+                ${getCardButtons('obras', o)}
+	    </div>`;
+    });
+}
+function renderHoras() {
+    const list = document.getElementById('list-horas'); 
+    if(!list) return;
+    list.innerHTML = '';
+    
+    const fMes = document.getElementById('filt-h-mes').value;
+    const fAno = document.getElementById('filt-h-ano').value;
+    const fEst = document.getElementById('filt-h-est').value;
+    const fUsr = (document.getElementById('filt-h-user')?.value || "").toLowerCase();
+    
+    const fObr = document.getElementById('filt-h-obr')?.value || '';
+	let grouped = {};
+    DB.horas.forEach(h => {
+        const hUser = h.assigned || h.u_crea || "Desconhecido";
+        const hDat = h.dat || "0000-00-00";
+        const d = hDat.split('-');
+
+        if((!fMes || d[1]===fMes)
+		&& (!fObr || h.obrNom === fObr) && (!fAno || d[0]===fAno) && (!fEst || h.est===fEst) && (!fUsr || hUser.toLowerCase().includes(fUsr))) {
+            const key = `${hDat}_${hUser}`;
+            if(!grouped[key]) grouped[key] = { dat: hDat, u: hUser, items: [], tot: 0 };
+            let diff = (new Date(`1970-01-01T${h.fim}`) - new Date(`1970-01-01T${h.ini}`))/3600000;
+            if(h.ini <= "12:00" && h.fim >= "13:00") diff -= 1;
+            grouped[key].items.push(h); 
+            grouped[key].tot += isNaN(diff) ? 0 : Math.max(0, diff);
+        }
+    });
+
+    Object.values(grouped).forEach(g => {
+        list.innerHTML += `<div class="group-header" style="background:#e2e8f0; padding:8px; margin:10px 0; font-weight:bold; border-radius:4px;">📅 ${g.dat} - 👤 ${g.u} | Total: ${g.tot.toFixed(2)}h</div>`;
+        g.items.forEach(h => {
+            list.innerHTML += `<div class="card"><input type="checkbox" class="chk-mass" value="${h.id}"><div class="card-grid"><div><b>Obra:</b> ${h.obrNom}</div><div><b>Tarefa:</b> ${h.task || '-'}</div><div><b>Horas:</b> ${h.horas || '0.00'}h (${h.ini}-${h.fim})</div><div><b>Estado:</b> ${h.est}</div></div>${getCardButtons('horas', h)}</div>`;
+        });
+    });
+}
+
+function renderRend() {
+    const list = document.getElementById('list-rend'); 
+    if(!list) return;
+    list.innerHTML = '';
+    
+    // Actualizar datalist predictivo
+    const taskList = document.getElementById('lista-task-sug');
+    if(taskList) {
+        const allTasks = [];
+        DB.rend.forEach(r => { if(r.task) allTasks.push(r.task); });
+        const uniqueTasks = [...new Set(allTasks)];
+        taskList.innerHTML = uniqueTasks.map(t => `<option value="${t}">`).join('');
+    }
+
+    const fMes = document.getElementById('filt-r-mes')?.value;
+	const fAno = document.getElementById('filt-r-ano')?.value;
+	const fEst = document.getElementById('filt-r-est')?.value;
+	const fUsr = (document.getElementById('filt-r-user')?.value || "").toLowerCase();
+	const fObr = document.getElementById('filt-r-obr')?.value || '';
+	const fTask = (document.getElementById('filt-r-task')?.value || "").toLowerCase();
+	
+    let groupedByObra = {};
+
+    DB.rend.forEach(r => {
+        if((!fObr || r.obrNom === fObr) && (!fTask || (r.task || '').toLowerCase().includes(fTask))) {
+            const validItems = (r.items || []).filter(i => {
+                const d = i.d ? i.d.split('-') : [];
+                const matchMes = (!fMes || d[1] === fMes);
+                const matchAno = (!fAno || d[0] === fAno);
+                const matchEst = (!fEst || i.e === fEst);
+                const matchUsr = (!fUsr || (i.u && i.u.some(usr => usr.toLowerCase().includes(fUsr))));
+                return matchMes && matchAno && matchEst && matchUsr;
+            });
+
+            if (validItems.length > 0 || (!fMes && !fAno && !fEst && !fUsr)) {
+                if(!groupedByObra[r.obrNom]) groupedByObra[r.obrNom] = {};
+                const tName = r.task || 'Sem Tarefa Definida';
+                if(!groupedByObra[r.obrNom][tName]) groupedByObra[r.obrNom][tName] = [];
+                groupedByObra[r.obrNom][tName].push(r);
+            }
+        }
+    });
+
+    Object.keys(groupedByObra).forEach(obra => {
+        list.innerHTML += `<div class="group-header" style="background:var(--p); color:white; font-size:13px; margin-top:20px;">🏗️ Obra: ${obra}</div>`;
+        
+        Object.keys(groupedByObra[obra]).forEach(tarefa => {
+            list.innerHTML += `<div class="group-header" style="background:#e2e8f0; color:var(--s); margin-top:10px; margin-left:15px; font-size:11px;">⚙️ Atividade: ${tarefa}</div>`;
+            
+            groupedByObra[obra][tarefa].forEach(r => {
+                let itemsHtml = (r.items || []).map(i => `
+                    <div style="font-size:10px; border-top:1px dashed #e2e8f0; padding-top:6px; margin-top:6px; display:grid; grid-template-columns: repeat(6, 1fr); gap: 5px;">
+                        <span>📅 ${i.d}</span>
+                        <span>⏱️ ${i.i} - ${i.f} (${i.h}h)</span>
+                        <span>⚖️ ${i.q} ${r.unid || ''}</span>
+                        <span style="grid-column: span 2;">👤 ${(i.u || []).join(', ')}</span>
+                        <span style="color:${i.e==='Aprobada'?'green':'red'}; font-weight:bold;">${i.e}</span>
+                    </div>
+                `).join('');
+
+                list.innerHTML += `
+                <div class="card" style="margin-left: 30px; border-left-color: var(--acc);">
+                    <input type="checkbox" class="chk-mass" value="${r.id}">
+                    <div class="card-grid" style="margin-bottom:5px; align-items: center;">
+                        <div><b>Unidade:</b> ${r.unid || '-'}</div>
+                        <div><b style="color:var(--acc);">Horas:</b> ${r.totHoras || '0.00'}h</div>
+                        <div><b style="color:var(--ok);">Qtd:</b> ${r.totQtd || '0.00'} ${r.unid || ''}</div>
+                        <div><b style="color:var(--p);">Rendimento:</b> ${r.ratio || '0.00'} h/${r.unid || ''}</div>
+                    </div>
+                    ${itemsHtml}
+                    ${getCardButtons('rend', r)}
+                </div>`;
+            });
+        });
+    });
+}
+
+function renderPed() {
+    const list = document.getElementById('list-ped'); list.innerHTML = '';
+    const fEst = document.getElementById('filt-ped-est') ? document.getElementById('filt-ped-est').value : '';
+    const fObr = document.getElementById('filt-ped-obr')?.value || '';
+	const fProv = document.getElementById('filt-ped-prov')?.value.toLowerCase() || '';
+	const fNE = document.getElementById('filt-ped-ne')?.value || '';
+	const fGuia = document.getElementById('filt-ped-guia')?.value || '';
+    const fMes = document.getElementById('filt-ped-mes')?.value || '';
+
+	let data = DB.ped.filter(p => {
+        const mesData = p.dataEst ? p.dataEst.split('-')[1] : '';
+        return (!fObr || p.obrNom === fObr) &&
+               (!fProv || (p.prov || '').toLowerCase().includes(fProv)) &&
+               (!fNE || (p.neNum || '').includes(fNE)) &&
+               (!fGuia || (p.guia || '').includes(fGuia)) && 
+               (!fEst || p.est === fEst) &&
+               (!fMes || mesData === fMes);
+    });
+
+    data.reverse().forEach(p => {
+        list.innerHTML += `
+            <div class="card" style="border-left-color: ${p.est === 'Entregue pelo Fornecedor' ? 'var(--ok)' : 'var(--warn)'}">
+                <input type="checkbox" class="chk-mass" value="${p.id}">
+                <div class="card-grid" style="align-items: center;">
+                    <div><b>Obra:</b> ${p.obrNom}</div>
+                    <div><b>Material:</b> ${p.mat}</div>
+                    <div><b>Qtd:</b> ${p.qtd}</div>
+                    <div><b>Fornecedor:</b> ${p.prov || '---'}</div>
+					<div><b>Nº NE:</b> ${p.neNum || '---'}</div>
+                    <div><b>Guia:</b> ${p.guia || 'Pendente'}</div>
+                    <div><b>Estado:</b> ${p.est}</div>
+                    <div style="background:#f1f5f9; padding:5px; border-radius:4px; border:1px solid #cbd5e1;">
+                        <b style="color:var(--acc); display:block; margin-bottom:2px; font-size:10px;">📅 Data Estimada:</b>
+                        <input type="date" value="${p.dataEst || ''}" onblur="updateSinglePedData('${p.id}', this.value)" onkeydown="if(event.key === 'Enter') this.blur()" style="padding:4px; border:1px solid #ccc; border-radius:3px; font-size:10px; width:90%">
+                    </div>
+                </div>
+                ${getCardButtons('ped', p)}
+            </div>`;
+    });
+}
+
+
+function renderNE() {
+    const list = document.getElementById('list-ne'); list.innerHTML = '';
+    const fNum = document.getElementById('filt-ne-num') ? document.getElementById('filt-ne-num').value.toLowerCase() : '';
+    const fObr = document.getElementById('filt-ne-obr')?.value || '';
+	const fProv = document.getElementById('filt-ne-prov')?.value.toLowerCase() || '';
+	const fEst = document.getElementById('filt-ne-est')?.value || '';
+	const fAno = document.getElementById('filt-ne-ano')?.value || '';
+
+	let data = DB.ne.filter(n =>
+    	(!fObr || n.obrNom === fObr) &&
+    	(!fProv || (n.prov || '').toLowerCase().includes(fProv)) &&
+    	(!fEst || n.est === fEst) && 
+        (!fAno || (n.num && n.num.includes(fAno))) && 
+        n.num && n.num.toLowerCase().includes(fNum));
+
+    data.reverse().forEach(n => {
+        list.innerHTML += `
+            <div class="card">
+                <input type="checkbox" class="chk-mass" value="${n.id}">
+                <div class="card-grid">
+                    <div><b>Nº NE:</b> ${n.num}</div>
+                    <div><b>Obra:</b> ${n.obrNom}</div>
+                    <div><b>Fornecedor:</b> ${n.prov}</div>
+                    <div><b>Estado:</b> ${n.est}</div>
+                    <div><b>Itens:</b> ${n.items ? n.items.length : 0}</div>
+                </div>
+                ${getCardButtons('ne', n)}
+            </div>`;
+    });
+}
+
+function renderTar() {
+    const list = document.getElementById('list-tar'); if(!list) return;
+    list.innerHTML = '';
+    const fEst = document.getElementById('filt-tar-est') ? document.getElementById('filt-tar-est').value : '';
+    const fObr = document.getElementById('filt-tar-obr')?.value || '';
+	let data = DB.tar.filter(t =>
+    	(!fObr || t.obrNom === fObr) && (!fEst || t.est === fEst));
+
+    data.forEach(t => {
+        list.innerHTML += `
+            <div class="card">
+                <input type="checkbox" class="chk-mass" value="${t.id}">
+                <div class="card-grid">
+                    <div><b>Obra:</b> ${t.obrNom}</div>
+                    <div><b>Estado:</b> ${t.est}</div>
+                    <div class="full-w"><b>Tarefa:</b> ${t.txt}</div>
+                    <div class="full-w"><b>Atribuído a:</b> ${(t.assigned || []).join(', ')}</div>
+                </div>
+                ${getCardButtons('tar', t)}
+            </div>`;
+    });
+}
+
+function renderObs() {
+    const list = document.getElementById('list-obs'); if(!list) return;
+    list.innerHTML = '';
+    const fEst = document.getElementById('filt-obs-est') ? document.getElementById('filt-obs-est').value : '';
+    const fObr = document.getElementById('filt-obs-obr')?.value || '';
+	let data = DB.obs.filter(o =>
+    	(!fObr || o.obrNom === fObr) && (!fEst || o.est === fEst));
+
+    const agrupado = {};
+
+	data.forEach(o => {
+    	if(!agrupado[o.obrNom]) agrupado[o.obrNom] = [];
+    	agrupado[o.obrNom].push(o);
+	});
+
+	Object.keys(agrupado).forEach(obra => {
+		list.innerHTML += `<div class="group-header">${obra}</div>`;
+		agrupado[obra].forEach(o => {
+		
+        list.innerHTML += `
+            <div class="card" style="border-left-color: ${o.est === 'Realizada' ? 'var(--ok)' : 'var(--err)'}">
+                <input type="checkbox" class="chk-mass" value="${o.id}">
+                <div class="card-grid">
+                    <div><b>Obra:</b> ${o.obrNom}</div>
+                    <div><b>Estado:</b> ${o.est}</div>
+                    <div class="full-w"><b>Relato:</b> ${o.txt}</div>
+                </div>
+                ${getCardButtons('obs', o)}
+            </div>`;
+    	});
+});
+}
+
+function renderNotif() {
+    const list = document.getElementById('list-notif'); if(!list) return;
+    list.innerHTML = '';
+    const fMod = document.getElementById('filt-notif-mod') ? document.getElementById('filt-notif-mod').value : '';
+    const fEst = document.getElementById('filt-notif-est') ? document.getElementById('filt-notif-est').value : '';
+
+    let data = DB.notif.filter(n => 
+        (fMod === '' || n.mod === fMod) &&
+        (fEst === '' || n.est === fEst)
+    );
+
+    data.slice(-30).reverse().forEach(n => {
+        list.innerHTML += `
+            <div class="card" style="opacity: ${n.est === 'Lida' ? '0.6' : '1'}; border-left-color: var(--warn)">
+                <input type="checkbox" class="chk-mass" value="${n.id}">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span><b>[${n.ts}]</b> ${n.msg}</span>
+                    ${n.est === 'Pendente' ? `<button onclick="markRead('${n.id}')" style="font-size:9px; cursor:pointer; padding:4px 8px; border-radius:3px; background:var(--ok); color:white; border:none;">Marcar Lida</button>` : '<span>Lida</span>'}
+                </div>
+            </div>`;
+    });
+}
+
+function renderUsers() {
+    const list = document.getElementById('list-users'); if(!list) return;
+    list.innerHTML = '';
+    if(!user || user.role !== 'Administrador') return;
+    
+    DB.users.forEach(u => {
+        list.innerHTML += `
+            <div class="card" style="border-left-color: ${u.st === 'Ativo' ? 'var(--ok)' : 'var(--err)'}">
+                <div class="card-grid">
+                    <div><b>Utilizador:</b> ${u.u}</div>
+                    <div><b>Senha:</b> ${u.p}</div>
+                    <div><b>Perfil:</b> ${u.role}</div>
+                    <div><b>Estado:</b> ${u.st}</div>
+                </div>
+                <div class="actions">
+                    <button class="b-edit" onclick="prepEdit('users','${u.id}')">Editar</button>
+                    <button class="b-del" onclick="deleteRecord('users','${u.id}')">Eliminar</button>
+                </div>
+            </div>`;
+    });
+}
+
+function prepEdit(mod, id) {
+    editingId = id;
+    const item = DB[mod].find(x => x.id === id);
+    const pre = getPrefix(mod);
+    
+    if(document.getElementById(`${pre}-cancel`)) {
+        document.getElementById(`${pre}-cancel`).style.display = 'block';
+    }
+	if(item.neId){
+    document.getElementById('ped-obr').disabled = true;
+    document.getElementById('ped-prov').disabled = true;
+    document.getElementById('ped-mat').disabled = true;
+    document.getElementById('ped-qtd').disabled = true;
+	}
+
+    if(mod === 'obras') {
+        document.getElementById('o-num').value = item.num;
+        document.getElementById('o-nom').value = item.nom;
+        document.getElementById('o-est').value = item.est;
+    } else if(mod === 'horas') {
+    	document.getElementById('h-dat').value = item.dat;
+    	document.getElementById('h-obr').value = item.obrId;
+    	document.getElementById('h-ini').value = item.ini;
+    	document.getElementById('h-fim').value = item.fim;
+    	document.getElementById('h-task').value = item.task;
+		if(document.getElementById('h-user')) document.getElementById('h-user').value = item.assigned || '';
+    	if(document.getElementById('h-est')) {
+        	document.getElementById('h-est').disabled = false;
+        	document.getElementById('h-est').value = item.est || 'Por Aprovar';
+    	}
+	} else if(mod === 'rend') {
+    	document.getElementById('r-obr').value = item.obrId;
+    	document.getElementById('r-task').value = item.task || '';
+    	document.getElementById('r-unid').value = item.unid || '';
+        document.getElementById('rend-body').innerHTML = '';
+        if(item.items && item.items.length > 0) {
+            item.items.forEach(it => addRendRow(it));
+        } else {
+            addRendRow();
+        }
+	} else if(mod === 'ne') {
+        document.getElementById('ne-num').value = item.num;
+        document.getElementById('ne-obr').value = item.obrId;
+        document.getElementById('ne-prov').value = item.prov || '';
+        document.getElementById('ne-est').value = item.est;
+        document.getElementById('ne-cond').value = item.cond || '';
+        document.getElementById('ne-body').innerHTML = '';
+        if(item.items) item.items.forEach(it => addNERow(it));
+        } else if(mod === 'ped') {
+        document.getElementById('ped-obr').value = item.obrId;
+        document.getElementById('ped-prov').value = item.prov || '';
+        document.getElementById('ped-mat').value = item.mat;
+        document.getElementById('ped-qtd').value = item.qtd;
+        document.getElementById('ped-est').value = item.est;
+        document.getElementById('ped-guia').value = item.guia || '';
+        document.getElementById('ped-ne').value = item.neNum || '';
+        } else if(mod === 'tar') {
+        document.getElementById('tar-txt').value = item.txt;
+        document.getElementById('tar-obr').value = item.obrId;
+        document.getElementById('tar-est').value = item.est;
+        // Si usas multiselect para usuarios:
+        if(item.assigned){
+    		Array.from(document.getElementById('tar-users').options).forEach(opt=>{
+        		opt.selected = item.assigned.includes(opt.value);
+   			 });
+		}
+    } else if(mod === 'obs') {
+        document.getElementById('obs-txt').value = item.txt;
+        document.getElementById('obs-obr').value = item.obrId;
+        document.getElementById('obs-est').value = item.est;
+        if(document.getElementById('obs-grav')) document.getElementById('obs-grav').value = item.grav || 'Leve';
+    } else if(mod === 'users') {
+        document.getElementById('u-nom').value = item.u;
+        document.getElementById('u-pwd').value = item.p;
+        document.getElementById('u-rol').value = item.role;
+		document.getElementById('u-est').value = item.st;
+    } else if(mod === 'forn') {
+        document.getElementById('forn-nome').value = item.nome || '';
+        document.getElementById('forn-nif').value = item.nif || '';
+        document.getElementById('forn-tel').value = item.tel || '';
+        document.getElementById('forn-telm').value = item.telm || '';
+        document.getElementById('forn-email').value = item.email || '';
+		document.getElementById('forn-morada').value = item.morada || '';
+		document.getElementById('forn-ativ').value = item.atividade || '';
+	}
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function cancelarEdit(mod) {
+    if(mod === 'empresa') return; // <--- AÑADIR ESTA LÍNEA (Evita que borre los datos visuales)
+    if(mod === 'ped'){
+        document.getElementById('ped-obr').disabled = false;
+        document.getElementById('ped-prov').disabled = false;
+        document.getElementById('ped-mat').disabled = false;
+        document.getElementById('ped-qtd').disabled = false;
+    }
+    editingId = null;
+    const pre = getPrefix(mod);
+    const form = document.querySelector(`#mod-${mod} .form-box`);
+    if(form) {
+        form.querySelectorAll('input, textarea').forEach(i => { if(i.type !== 'button') i.value = ''; });
+        form.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
+    }
+    if(document.getElementById(`${pre}-cancel`)) document.getElementById(`${pre}-cancel`).style.display = 'none';
+    if(mod === 'ne') { document.getElementById('ne-body').innerHTML = ''; autoNumNE(); addNERow(); }
+    if(mod === 'rend') { document.getElementById('rend-body').innerHTML = ''; addRendRow(); }
+    if(mod === 'horas' && document.getElementById('h-est')) document.getElementById('h-est').disabled = true;
+}
+
+function getPrefix(mod) {
+    const map = { obras:'o', rend:'r', horas:'h', obs:'obs', ne:'ne', ped:'ped', tar:'tar', users:'u', forn:'forn' };
+    return map[mod] || '';
+}
+
+async function markRead(id) { 
+    await db.ref(`notif/${id}/est`).set('Lida'); 
+}
+
+async function createNotif(mod, msg) {
+    const id = `NOT_${Date.now()}`;
+    await db.ref(`notif/${id}`).set({ id, mod, msg, ts: new Date().toLocaleString(), est: 'Pendente' });
+    
+    db.ref('notif').once('value', snap => {
+        const notifs = snap.val();
+        if(notifs) {
+            const keys = Object.keys(notifs).sort();
+            if(keys.length > 50) {
+                const keysToDelete = keys.slice(0, keys.length - 50);
+                keysToDelete.forEach(k => db.ref(`notif/${k}`).remove());
+            }
+        }
+    });
+}
+
+// --- FIN DEL CÓDIGO A PEGAR PARA EL PASO 4 ---
+function getCardButtons(mod, item) {
+    // Bloqueo de edición de horas si ya están aprobadas y no es admin
+    const isLockedHour = (mod === 'horas' && item.est === 'Aprobada' && user.role !== 'Administrador');
+    const isLockedPed = (mod === 'ped' && item.locked);
+	const isFromNE = (mod === 'ped' && item.neId);
+	const isBlocked = isFromNE && item.est === 'Sem Efeito';
+    
+    return `
+        <div class="actions">
+            ${(!isLockedHour && !isLockedPed && !isBlocked) ? `<button class="b-edit" onclick="prepEdit('${mod}','${item.id}')">✏️ Editar</button>` : ''}
+            <button class="b-note" onclick="openNota('${mod}','${item.id}')">📝 Notas</button>
+            <button class="b-hist" onclick="openHist('${item.id}')">📜 Historial</button>
+            <button class="b-file" onclick="openFiles('${mod}','${item.id}')">📁 Anexos (${item.files ? item.files.length : 0})</button>
+            ${user.role === 'Administrador' ? `<button class="b-del" onclick="deleteRecord('${mod}','${item.id}')">🗑️ Eliminar</button>` : ''}
+        </div>`;
+}
+
+// --- GESTIÓN DE ADJUNTOS Y DESCARGA ZIP (Requisito) ---
+function openFiles(mod, id) { 
+    activeFileId = {mod, id}; 
+    refreshFileList();
+    document.getElementById('modal-files').style.display = 'block'; 
+}
+
+function refreshFileList() {
+    const list = document.getElementById('file-list');
+    const item = DB[activeFileId.mod].find(x => x.id === activeFileId.id);
+    list.innerHTML = item.files && item.files.length > 0 ? item.files.map((f, i) => `<div style="display:flex; justify-content:space-between; padding:8px; background:#f8fafc; margin-bottom:5px; border-radius:4px;"> <span>📄 ${f.n}</span> <div style="display:flex; gap:10px;"><button onclick="downloadSingleFile(${i})" style="color:var(--acc); border:none; background:none; cursor:pointer; font-weight:bold;">Descarregar</button><button onclick="deleteFile(${i})" style="color:var(--err); border:none; background:none; cursor:pointer; font-weight:bold;">Eliminar</button></div> </div>`).join('') : 'Nenhum ficheiro anexado.';
+}
+
+function downloadSingleFile(idx) {
+    const item = DB[activeFileId.mod].find(x => x.id === activeFileId.id);
+    const f = item.files[idx];
+    const byteString = atob(f.d.split(',')[1]);
+    const mimeString = f.d.split(',')[0].split(':')[1].split(';')[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([ab], {type: mimeString});
+    saveAs(blob, f.n);
+}
+
+async function deleteFile(index) {
+    if(!confirm("Tem a certeza que deseja eliminar este ficheiro?")) return;
+    const item = DB[activeFileId.mod].find(x => x.id === activeFileId.id);
+    item.files.splice(index, 1);
+    await db.ref(`${activeFileId.mod}/${activeFileId.id}/files`).set(item.files);
+    refreshFileList();
+}
+
+async function handleFileUpload() {
+    const fileInput = document.getElementById('file-input');
+    const files = fileInput.files;
+
+    if (!files.length) {
+    	alert("Nenhum ficheiro selecionado");
+    	return;
+	}
+	const progressContainer = document.getElementById('upload-progress');
+	if (progressContainer) progressContainer.style.display = 'block';
+
+    const progressBar = document.getElementById('upload-bar');
+    if (progressBar) progressBar.style.width = "0%";
+
+    let updates = {};
+    let total = files.length;
+    let processed = 0;
+
+    await Promise.all(Array.from(files).map(async (f) => {
+
+        // 🔴 VALIDACIÓN DE TAMAÑO
+        if (f.size > 10 * 1024 * 1024) {
+            alert(`Ficheiro demasiado grande: ${f.name}`);
+            processed++;
+
+			if (progressBar) {
+    			const percent = Math.round((processed / total) * 100);
+    			progressBar.style.width = `${percent}%`;
+			}
+
+			return;
+        }
+
+        let base64;
+
+        if (f.type.startsWith("image/")) {
+            // 🔥 COMPRESIÓN EN WEB WORKER (NO BLOQUEA LA PANTALLA)
+            base64 = await compressImage(f);
+        } else {
+            // 🔥 LECTURA NORMAL PARA PDFs O DOCUMENTOS
+            const reader = new FileReader();
+            base64 = await new Promise((resolve) => {
+                reader.onload = (e) => resolve(e.target.result);
+                reader.readAsDataURL(f.slice(0, f.size));
+            });
+        }
+
+        // 🔥 REDUCIR BASE64 (QUITAR PREFIJO)
+        const cleanBase64 = base64.split(',')[1];
+
+        const fileData = {
+            n: `${f.name}`,
+            d: cleanBase64,
+            t: f.type
+        };
+
+        // 🔥 CASO MASIVO (PARALELO)
+        if (activeFileId.ids) {
+
+            activeFileId.ids.forEach((id) => {
+                const item = DB[activeFileId.mod].find(x => x.id === id);
+                if (item) {
+                    const key = `${activeFileId.mod}/${id}/files`;
+					const existingFiles = updates[key] || item.files || [];
+					updates[key] = [...existingFiles, fileData];
+                }
+            });
+
+        } else {
+
+            const item = DB[activeFileId.mod].find(x => x.id === activeFileId.id);
+            if (item) {
+                const key = `${activeFileId.mod}/${activeFileId.id}/files`;
+				const existingFiles = updates[key] || item.files || [];
+				updates[key] = [...existingFiles, fileData];
+            }
+        }
+
+        // 🔥 ACTUALIZAR PROGRESO
+        processed++;
+
+		if (progressBar) {
+    		const percent = Math.round((processed / total) * 100);
+    		progressBar.style.width = `${percent}%`;
+		}
+
+    }));
+
+    // 🔥 UNA SOLA ESCRITURA A FIREBASE
+    try {
+
+    	if (Object.keys(updates).length === 0) {
+        	alert("Nenhum ficheiro válido foi anexado");
+        	return;
+    	}
+
+    	await db.ref().update(updates);
+    	alert("Ficheiros anexados com sucesso");
+
+	} catch (error) {
+    	console.error(error);
+    	alert("Erro ao carregar ficheiros");
+	}
+	if (progressContainer) progressContainer.style.display = 'none';
+
+    // RESET
+    fileInput.value = "";
+    if (progressBar) progressBar.style.width = "100%";
+}
+async function downloadCurrentFiles() {
+    const item = DB[activeFileId.mod].find(x => x.id === activeFileId.id);
+    if (!item.files || !item.files.length) return alert("Não existem ficheiros.");
+    
+    const zip = new JSZip();
+    item.files.forEach(f => {
+        const base64Data = f.d.split(',')[1];
+        zip.file(f.n, base64Data, {base64: true});
+    });
+    
+    const content = await zip.generateAsync({type:"blob"});
+    saveAs(content, `Doc_${item.num || item.id}.zip`);
+}
+
+// --- EXPORTACIÓN A EXCEL (Requisito) ---
+function exportarExcel(mod) {
+    let dataToExport = JSON.parse(JSON.stringify(DB[mod]));
+
+	dataToExport = dataToExport.map(d => {
+    	// NOTAS
+    	d.notas_detalle = d.notas || '';
+
+    	// HISTÓRICO
+    	const hist = DB.hist[d.id];
+	    if(hist){
+        	d.historial = Object.values(hist)
+            	.map(h => `[${h.ts}] ${h.u}: ${h.log}`)
+            	.join(' | ');
+    	} else {
+        	d.historial = '';
+    	}
+
+    	return d;
+	});
+    // Limpieza de datos técnicos para el Excel
+    dataToExport.forEach(d => { delete d.files; });
+    
+    const headersMap = {
+    	num: "Nº",
+    	nom: "Nombre",
+    	est: "Estado",
+    	dat: "Data",
+    	obrNom: "Obra",
+    	task: "Tarefa",
+    	horas: "Horas",
+    	prov: "Fornecedor",
+    	mat: "Material",
+    	qtd: "Quantidade",
+    	notas_detalle: "Notas",
+    	historial: "Histórico de Alterações"
+	};
+
+	const dataFormatted = dataToExport.map(d => {
+    	let obj = {};
+    	Object.keys(d).forEach(k => {
+        	obj[headersMap[k] || k] = d[k];
+    	});
+    	return obj;
+	});
+
+	const ws = XLSX.utils.json_to_sheet(dataFormatted);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, mod.toUpperCase());
+    XLSX.writeFile(wb, `Reporte_${mod}_${new Date().toLocaleDateString()}.xlsx`);
+}
+
+// --- FUNCIONES DE SOPORTE ADICIONALES ---
+function updateSelects() {
+    // 1. Obras solo en ejecución PARA LOS FORMULARIOS de criação/edição
+    let execObras = DB.obras.filter(o => o.est === 'Em Execução');
+    execObras.sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+    const options = execObras.map(o => `<option value="${o.id}">${o.num} - ${o.nom}</option>`).join('');
+    
+    // Retiramos los 'filt-x-obr' de este array para que no rompan los filtros generales,
+    // que son alimentados por la función populateObraFilter() con TODAS las obras históricas.
+    ['h-obr', 'r-obr', 'obs-obr', 'ne-obr', 'ped-obr', 'tar-obr'].forEach(id => {
+        if(document.getElementById(id)) document.getElementById(id).innerHTML = options || '<option value="">Sem Obras Ativas</option>';
+    });
+
+    const userOpts = DB.users.map(u => `<option value="${u.u}">${u.u} (${u.role})</option>`).join('');
+    if(document.getElementById('tar-users')) document.getElementById('tar-users').innerHTML = userOpts;
+	if(document.getElementById('h-user')) document.getElementById('h-user').innerHTML = userOpts;
+
+	// Llenar select de proveedores en el módulo NE
+    const fornOpts = DB.forn.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
+    if(document.getElementById('ne-forn-sel')) document.getElementById('ne-forn-sel').innerHTML = '<option value="">-- Selecione Fornecedor --</option>' + fornOpts;
+
+}
+
+
+function autoNumNE() {
+    if(!editingId) {
+        const currentYear = new Date().getFullYear().toString();
+        const nesThisYear = DB.ne.filter(n => n.num && n.num.includes('.' + currentYear));
+        let maxNum = 0;
+        nesThisYear.forEach(n => {
+            const parts = n.num.split('.');
+            if(parts.length > 0) {
+                const numPart = parseInt(parts[0].replace('NE', ''), 10);
+                if(!isNaN(numPart) && numPart > maxNum) maxNum = numPart;
+            }
+        });
+        document.getElementById('ne-num').value = `NE${String(maxNum + 1).padStart(3, '0')}.${currentYear}`;
+    }
+}
+
+function toggleMass(mod) {
+    massMode = !massMode;
+    document.getElementById(`mod-${mod}`).classList.toggle('mass-mode');
+    document.getElementById(`mass-${mod}`).style.display = massMode ? 'block' : 'none';
+}// Función para abrir el modal de subida masiva para los registros seleccionados
+async function openMassUpload(mod) {
+    const selected = Array.from(document.querySelectorAll(`#mod-${mod} .chk-mass:checked`)).map(cb => cb.value);
+    if(selected.length === 0) return alert("Selecione pelo menos um registo.");
+    
+    // Configuramos el ID activo para que sepa que es una subida masiva a varios IDs
+    activeFileId = { mod, isMass: true, ids: selected };
+    document.getElementById('file-list').innerHTML = `<p style="color:var(--acc)"><b>Modo Massivo:</b> Preparado para anexar ficheiros a ${selected.length} registos selecionados.</p>`;
+    document.getElementById('modal-files').style.display = 'block';
+}
+
+// Función para descargar todos los archivos de los registros seleccionados en un solo ZIP
+async function downloadMassFiles(mod) {
+    const selected = Array.from(document.querySelectorAll(`#mod-${mod} .chk-mass:checked`)).map(cb => cb.value);
+    if(selected.length === 0) return alert("Selecione pelo menos um registo.");
+    
+    const zip = new JSZip();
+    let hasFiles = false;
+
+    selected.forEach(id => {
+        const item = DB[mod].find(x => x.id === id);
+        if(item && item.files && item.files.length > 0) {
+            hasFiles = true;
+            item.files.forEach(f => {
+                // Extraemos la base64 quitando el prefijo de data URI
+                const base64Data = f.d.split(',')[1];
+                // Creamos una carpeta por cada registro dentro del ZIP para que no se mezclen
+                const folderName = item.num || item.id;
+                zip.file(`${folderName}/${f.n}`, base64Data, {base64: true});
+            });
+        }
+    });
+
+    if(!hasFiles) return alert("Os registos selecionados não possuem ficheiros para descargar.");
+
+    const content = await zip.generateAsync({type:"blob"});
+    saveAs(content, `Documentacao_Massiva_${mod.toUpperCase()}_${Date.now()}.zip`);
+}
+
+// Función para marcar notificaciones seleccionadas como leídas
+async function markSelectedRead() {
+    const selected = Array.from(document.querySelectorAll(`#mod-notif .chk-mass:checked`)).map(cb => cb.value);
+    if(selected.length === 0) return alert("Selecione pelo menos uma notificação.");
+    
+    for(let id of selected) {
+        await db.ref(`notif/${id}/est`).set('Lida');
+    }
+    alert("Notificações atualizadas!");
+}
+
+
+async function deleteRecord(mod, id) {
+    // Validación de seguridad para que solo el Admin pueda ejecutar la acción de borrado
+    if(!user || user.role !== 'Administrador') {
+        return alert("Acesso negado: Apenas utilizadores com credencial de Administrador podem eliminar registos.");
+    }
+    
+    if(mod === 'ne') {
+        if(!confirm("Atenção: Eliminar esta Nota de Encomenda apagará permanentemente todos os Pedidos de Materiais associados (incluindo os que estão Sem Efeito). Deseja continuar?")) return;
+        const linkedPeds = DB.ped.filter(p => p.neId === id);
+        for(let p of linkedPeds) await db.ref(`ped/${p.id}`).remove();
+    } else {
+        if(!confirm("Tem a certeza que deseja eliminar este registo permanentemente?")) return;
+    }
+
+    await db.ref(`${mod}/${id}`).remove();
+    alert("Registo eliminado com sucesso.");
+}
+
+async function deleteMassRecords(mod) {
+    if(!user || user.role !== 'Administrador') {
+        return alert("Acesso negado: Apenas utilizadores com credencial de Administrador podem eliminar registos.");
+    }
+    const selected = Array.from(document.querySelectorAll(`#mod-${mod} .chk-mass:checked`)).map(cb => cb.value);
+    if(selected.length === 0) return alert("Selecione pelo menos um registo para eliminar.");
+    
+    if(mod === 'ne') {
+        if(!confirm(`Atenção: Eliminar estas ${selected.length} Notas de Encomenda apagará permanentemente todos os Pedidos de Materiais associados. Deseja continuar?`)) return;
+    } else {
+        if(!confirm(`Tem a certeza que deseja eliminar ${selected.length} registos permanentemente?`)) return;
+    }
+
+    for(let id of selected) {
+        if(mod === 'ne') {
+            const linkedPeds = DB.ped.filter(p => p.neId === id);
+            for(let p of linkedPeds) await db.ref(`ped/${p.id}`).remove();
+        }
+        await db.ref(`${mod}/${id}`).remove();
+    }
+    alert("Registos eliminados com sucesso.");
+}
+
+
+// --- FUNCIONES FECHA ESTIMADA PEDIDOS ---
+async function updateSinglePedData(id, value) {
+    await db.ref(`ped/${id}/dataEst`).set(value);
+    // No hace falta renderizar completo, Firebase lo sincroniza y muestra.
+}
+
+async function setMassPedData() {
+    const selected = Array.from(document.querySelectorAll(`#mod-ped .chk-mass:checked`)).map(cb => cb.value);
+    const dataVal = document.getElementById('mass-ped-data').value;
+    
+    if(selected.length === 0) return alert("Selecione pelo menos um pedido no check-list.");
+    if(!dataVal) return alert("Por favor, selecione uma data no calendário massivo para aplicar.");
+    
+    for(let id of selected) {
+        await db.ref(`ped/${id}/dataEst`).set(dataVal);
+    }
+    
+    alert("Data estimada aplicada aos itens selecionados!");
+    
+    // Desmarcar checkboxes después de la acción
+    document.querySelectorAll(`#mod-ped .chk-mass:checked`).forEach(cb => cb.checked = false);
+}
+	
+
+
+// --- MODALES Y NOTAS ---
+// --- MÓDULO FORNECEDORES ---
+async function saveForn() {
+    const nome = document.getElementById('forn-nome').value.trim();
+    if(!nome) return alert("O Nome do Fornecedor é obrigatório!");
+
+    const id = editingId || `FORN_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+    const isNew = !editingId;
+    const old = isNew ? null : DB.forn.find(x => x.id === id);
+    
+    const data = {
+        id,
+        nome,
+        nif: document.getElementById('forn-nif').value,
+        tel: document.getElementById('forn-tel').value,
+        telm: document.getElementById('forn-telm').value,
+        email: document.getElementById('forn-email').value,
+		morada: document.getElementById('forn-morada').value,
+		atividade: document.getElementById('forn-ativ').value,
+        notas: old ? old.notas || '' : '',
+        files: old ? old.files || [] : [],
+        d_crea: isNew ? new Date().toLocaleString() : old.d_crea,
+        u_crea: isNew ? (user.u || user.n) : old.u_crea,
+        d_edit: new Date().toLocaleString(),
+        u_edit: user.u || user.n
+    };
+
+    const log = generateDiff(old, data);
+    await db.ref(`forn/${id}`).set(data);
+    
+    if(log) await db.ref(`hist/${id}`).push({ 
+        u: user.u || user.n, ts: data.d_edit, log, d_crea: data.d_crea 
+    });
+
+    if(isNew) createNotif('forn', `[FORN - Criado] Nome: ${nome} | NIF: ${document.getElementById('forn-nif').value || 'N/A'} | Tel: ${document.getElementById('forn-tel').value || 'N/A'}`);
+    alert("Fornecedor guardado com sucesso!");
+    cancelarEdit('forn');
+}
+
+async function saveEmpresa() {
+    const data = {
+        nome: document.getElementById('emp-nome').value,
+        nif: document.getElementById('emp-nif').value,
+        morada: document.getElementById('emp-morada').value,
+        web: document.getElementById('emp-web').value,
+        logo: document.getElementById('emp-logo').value // Asegúrate que el base64 no sea excesivo
+    };
+
+    try {
+        await db.ref('empresa').set(data);
+        alert("Dados da empresa guardados!");
+    } catch (e) {
+        console.error(e);
+        alert("Erro ao guardar dados.");
+    }
+}
+
+	
+function renderForn() {
+    // AÑADIR ESTO: Actualiza las sugerencias para NE y Pedidos
+    const dlist = document.getElementById('lista-forn-sug');
+    if(dlist) dlist.innerHTML = DB.forn.map(f => `<option value="${f.nome}">`).join('');
+	const list = document.getElementById('list-forn');
+    if(!list) return;
+    list.innerHTML = '';
+    const fNome = document.getElementById('filt-forn-nome').value.toLowerCase();
+	const fAtiv = document.getElementById('filt-forn-ativ') ? document.getElementById('filt-forn-ativ').value.toLowerCase() : '';
+
+    let data = DB.forn.filter(f => 
+    	(!fNome || (f.nome && f.nome.toLowerCase().includes(fNome))) &&
+    	(!fAtiv || (f.atividade || '').toLowerCase().includes(fAtiv))
+	);
+
+    data.reverse().forEach(f => {
+        list.innerHTML += `
+            <div class="card">
+                <div class="card-grid">
+                    <div><b>Nome:</b> ${f.nome}</div>
+                    <div><b>NIF:</b> ${f.nif || '---'}</div>
+                    <div><b>Telefone:</b> ${f.tel || '---'}</div>
+                    <div><b>Telemóvel:</b> ${f.telm || '---'}</div>
+                    <div class="full-w"><b>E-mail:</b> ${f.email || '---'}</div>
+                    <div class="full-w"><b>Morada:</b> ${f.morada || '---'}</div>
+					<div class="full-w"><b>Atividade:</b> ${f.atividade || '---'}</div>
+                </div>
+                ${getCardButtons('forn', f)}
+            </div>`;
+    });
+}
+
+// --- MODALES Y NOTAS ---
+function openNota(mod, id) { 
+    activeNotaId = {mod, id}; 
+    const item = DB[mod].find(x => x.id === id);
+    document.getElementById('nota-texto').value = item.notas || ''; 
+    document.getElementById('modal-notas').style.display = 'block'; 
+}
+
+async function saveNota() { 
+    await db.ref(`${activeNotaId.mod}/${activeNotaId.id}/notas`).set(document.getElementById('nota-texto').value); 
+    closeModal('modal-notas'); 
+}
+
+async function openHist(id) { 
+    document.getElementById('hist-body').innerHTML = '<p style="text-align:center; padding:10px;">A carregar histórico da base de dados...</p>'; 
+    document.getElementById('modal-hist').style.display = 'block'; 
+    
+    const snap = await db.ref(`hist/${id}`).once('value');
+    const h = snap.val();
+    
+    document.getElementById('hist-body').innerHTML = h ? Object.values(h).reverse().map(x => `<div style="margin-bottom:8px; border-bottom:1px solid #eee;"><b>[${x.ts}] ${x.u}:</b><br>${x.log}</div>`).join('') : 'Sem histórico disponível.'; 
+}
+
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+async function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        // 🔥 WORKER EN LÍNEA: Se ejecuta en un hilo separado
+        const workerCode = `
+            self.onmessage = async function(e) {
+                try {
+                    const bmp = await createImageBitmap(e.data);
+                    const MAX_WIDTH = 1024;
+                    const scale = Math.min(1, MAX_WIDTH / bmp.width);
+                    
+                    // OffscreenCanvas funciona fuera del DOM
+                    const canvas = new OffscreenCanvas(bmp.width * scale, bmp.height * scale);
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+                    
+                    const blob = await canvas.convertToBlob({ type: 'image/webp', quality: 0.7 });
+                    
+                    // FileReaderSync es exclusivo para Web Workers y súper veloz
+                    const reader = new FileReaderSync();
+                    self.postMessage({ success: true, base64: reader.readAsDataURL(blob) });
+                } catch (err) {
+                    self.postMessage({ success: false, error: err.message });
+                }
+            };
+        `;
+        
+        // Convertimos el código string a una URL temporal para instanciar el Worker
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(blob));
+        
+        worker.onmessage = (e) => {
+            if (e.data.success) {
+                resolve(e.data.base64);
+            } else {
+                console.error("Erro na compressão:", e.data.error);
+                reject(e.data.error);
+            }
+            worker.terminate(); // 🔥 Fundamental para liberar RAM tras cada imagen
+        };
+        
+        worker.onerror = (err) => {
+            console.error("Erro fatal no Worker:", err);
+            reject(err);
+            worker.terminate();
+        };
+        
+        // Enviamos el archivo original directamente al Worker
+        worker.postMessage(file);
+    });
+}
+	
+function logout() {
+    if(confirm("Deseja realmente sair do sistema?")) {
+        user = null;
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('login-sec').style.display = 'block';
+        document.getElementById('log-u').value = '';
+        document.getElementById('log-p').value = '';
+    }
+}
+
+// Inicialização
+window.onload = () => {
+    sync();
+
+    // updateSelects() eliminado de aquí para evitar reseteo de selección
+};
+
+</script>
+<datalist id="lista-forn-sug"></datalist>
+<datalist id="lista-task-sug"></datalist>
+</body>
+</html>
