@@ -1,0 +1,15 @@
+{
+  "name": "ROFREICRC - Obras",
+  "short_name": "ROFREICRC",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#1e3a5f",
+  "theme_color": "#1e3a5f",
+  "icons": [
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
