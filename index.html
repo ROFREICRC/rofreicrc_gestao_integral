@@ -1921,7 +1921,12 @@ function updateSelects() {
     // Retiramos los 'filt-x-obr' de este array para que no rompan los filtros generales,
     // que son alimentados por la función populateObraFilter() con TODAS las obras históricas.
     ['h-obr', 'r-obr', 'obs-obr', 'ne-obr', 'ped-obr', 'tar-obr'].forEach(id => {
-        if(document.getElementById(id)) document.getElementById(id).innerHTML = options || '<option value="">Sem Obras Ativas</option>';
+        const el = document.getElementById(id);
+        if(el) {
+            const currentVal = el.value; // Guardamos el valor actual por si se está editando
+            el.innerHTML = options ? '<option value="" disabled selected>-- Selecione a Obra --</option>' + options : '<option value="">Sem Obras Ativas</option>';
+            if(currentVal) el.value = currentVal; // Restauramos el valor si ya había uno seleccionado
+        }
     });
 
     const userOpts = DB.users.map(u => `<option value="${u.u}">${u.u} (${u.role})</option>`).join('');
