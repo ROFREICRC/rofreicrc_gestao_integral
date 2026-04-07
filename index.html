@@ -253,7 +253,13 @@
                 <div class="grid">
                     <div><label>Nº Encomenda</label><input type="text" id="ne-num" readonly style="background:#f1f5f9"></div>
                                         <div><label>Obra (Apenas Em Execução)</label><select id="ne-obr"></select></div>
-                    <div><label>Seleccionar Fornecedor *</label><input type="text" id="ne-prov" list="lista-forn-sug" placeholder="Escreva ou selecione..."></div>
+                    <div><label>Seleccionar Fornecedor *</label><input type="text" id="ne-prov" list="lista-forn-sug" placeholder="Escreva ou selecione..." oninput="autoFillNEForn()"></div>
+                    <div><label>Pessoa de Contacto</label><input type="text" id="ne-contato"></div>
+                    <div><label>NIF</label><input type="text" id="ne-nif"></div>
+                    <div><label>Morada</label><input type="text" id="ne-morada"></div>
+                    <div><label>Telefone</label><input type="text" id="ne-tel"></div>
+                    <div><label>Telemóvel</label><input type="text" id="ne-telm"></div>
+                    <div><label>E-mail</label><input type="email" id="ne-email"></div>
                     <div><label>Estado</label><select id="ne-est"><option>Por Solicitar</option><option>Enviado ao Fornecedor</option><option>Entregue pelo Fornecedor</option><option>Sem Efeito</option></select></div>
                     <div class="full-w"><label>Condições de Fornecimento | Execução (Local, Data Estimada, etc.)</label><textarea id="ne-cond" rows="2"></textarea></div>
                 </div>
@@ -969,45 +975,35 @@ async function saveNE() {
 
         const skipPrompts = (old && !incrementaVersion);
 
-    	// 🔥 NUEVO: Reutilizar proveedor si ya existe el registro y solo cambia estado
-    	if(!fData && skipPrompts) {
-        	fData = {
-            	nome: old.prov,
-            	nif: old.nif,
-            	morada: old.morada,
-            	tel: old.tel,
-            	telm: old.telm,
-            	email: old.email
-        	};
-    	}
+    	const nifVal = document.getElementById('ne-nif').value;
+    	const moradaVal = document.getElementById('ne-morada').value;
+    	const telVal = document.getElementById('ne-tel').value;
+    	const telmVal = document.getElementById('ne-telm').value;
+    	const emailVal = document.getElementById('ne-email').value;
+    	const contatoNome = document.getElementById('ne-contato').value || "---";
 
-    	if(!fData && !skipPrompts) {
-        	const confirmar = confirm(`O fornecedor "${provNome}" não existe. Deseja registrá-lo na base de dados?`);
-
-        	if(!confirmar){
-        		const nif = prompt("NIF:") || "";
-        		const morada = prompt("Morada:") || "";
-        		const tel = prompt("Telefone:") || "";
-        		const telm = prompt("Telemóvel:") || "";
-        		const email = prompt("E-mail:") || "";
-        		fData = { nome: provNome, nif, morada, tel, telm, email };
-    		} else {
-                const nif = prompt("NIF:") || "";
-                const morada = prompt("Morada:") || "";
-                const tel = prompt("Telefone:") || "";
-                const telm = prompt("Telemóvel:") || "";
-                const email = prompt("E-mail:") || "";
-                const fornId = `FORN_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
-                fData = { id: fornId, nome: provNome, nif, morada, tel, telm, email, atividade: "", d_crea: new Date().toLocaleString(), u_crea: user.u || user.n, d_edit: new Date().toLocaleString(), u_edit: user.u || user.n };
-                await db.ref(`forn/${fornId}`).set(fData);
-    		}
-    	}
-
-        let contatoNome = "---";
-        if (skipPrompts) {
-            contatoNome = old.contatoNome || "---";
+    	// Reutilizar o crear temporalmente los datos para impresión
+        if(!fData) {
+            fData = { nome: provNome, nif: nifVal, morada: moradaVal, tel: telVal, telm: telmVal, email: emailVal };
+            
+            if(!skipPrompts) {
+                const confirmar = confirm(`O fornecedor "${provNome}" não existe na base de dados. Deseja registrá-lo agora?\n[OK] para Registar e Continuar\n[Cancelar] para Cancelar o processo de gravação da N.E.`);
+                if(confirmar) {
+                    const fornId = `FORN_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+                    fData.id = fornId;
+                    fData.atividade = "";
+                    fData.d_crea = new Date().toLocaleString();
+                    fData.u_crea = user.u || user.n;
+                    fData.d_edit = new Date().toLocaleString();
+                    fData.u_edit = user.u || user.n;
+                    await db.ref(`forn/${fornId}`).set(fData);
+                } else {
+                    return; // Requisito 4: Cancela el proceso por completo
+                }
+            }
         } else {
-            contatoNome = prompt("Nome da pessoa de contacto que representa o fornecedor:") || "---";
+            // Se actualiza el objeto local a usar para que el PDF y los datos de la N.E. tomen los valores tecleados
+            fData.nif = nifVal; fData.morada = moradaVal; fData.tel = telVal; fData.telm = telmVal; fData.email = emailVal;
         }
 
     const version = old && old.version !== undefined ? (incrementaVersion ? old.version + 1 : old.version) : 0;
@@ -1052,7 +1048,11 @@ async function saveNE() {
         doc.setFont(undefined, 'normal');
         doc.text(`Nome: ${fData.nome}`, 10, 53);
         doc.text(`NIF: ${fData.nif || '---'}`, 10, 58);
-        doc.text(`Morada: ${fData.morada || '---'}`, 10, 63);
+        
+        // Requisito 2: Wrap de la Morada para evitar que invada el lado derecho (100)
+        const splitMorada = doc.splitTextToSize(`Morada: ${fData.morada || '---'}`, 85);
+        doc.text(splitMorada, 10, 63);
+
         doc.text(`Contacto: ${contatoNome}`, 100, 53);
         doc.text(`Tel: ${fData.tel || '---'} / Telm: ${fData.telm || '---'}`, 100, 58);
         doc.text(`E-mail: ${fData.email || '---'}`, 100, 63);
@@ -1576,14 +1576,24 @@ function prepEdit(mod, id) {
             addRendRow();
         }
 	} else if(mod === 'ne') {
-        document.getElementById('ne-num').value = item.num;
-        document.getElementById('ne-obr').value = item.obrId;
-        document.getElementById('ne-prov').value = item.prov || '';
-        document.getElementById('ne-est').value = item.est;
-        document.getElementById('ne-cond').value = item.cond || '';
-        document.getElementById('ne-body').innerHTML = '';
-        if(item.items) item.items.forEach(it => addNERow(it));
-        } else if(mod === 'ped') {
+            document.getElementById('ne-num').value = item.num;
+            document.getElementById('ne-obr').value = item.obrId;
+            document.getElementById('ne-prov').value = item.prov || '';
+            document.getElementById('ne-est').value = item.est;
+            document.getElementById('ne-cond').value = item.cond || '';
+            
+            // Requisito 3: Actualizar campos con BD centralizada, fallback al historial si no existe
+            const fData = DB.forn.find(f => f.nome.toLowerCase() === (item.prov || '').toLowerCase());
+            document.getElementById('ne-contato').value = item.contatoNome || '';
+            document.getElementById('ne-nif').value = fData ? fData.nif : (item.nif || '');
+            document.getElementById('ne-morada').value = fData ? fData.morada : (item.morada || '');
+            document.getElementById('ne-tel').value = fData ? fData.tel : (item.tel || '');
+            document.getElementById('ne-telm').value = fData ? fData.telm : (item.telm || '');
+            document.getElementById('ne-email').value = fData ? fData.email : (item.email || '');
+
+            document.getElementById('ne-body').innerHTML = '';
+            if(item.items) item.items.forEach(it => addNERow(it));
+            } else if(mod === 'ped') {
         document.getElementById('ped-obr').value = item.obrId;
         document.getElementById('ped-prov').value = item.prov || '';
         document.getElementById('ped-mat').value = item.mat;
@@ -1703,8 +1713,12 @@ function refreshFileList() {
 function downloadSingleFile(idx) {
     const item = DB[activeFileId.mod].find(x => x.id === activeFileId.id);
     const f = item.files[idx];
-    const byteString = atob(f.d.split(',')[1]);
-    const mimeString = f.d.split(',')[0].split(':')[1].split(';')[0];
+    
+    // Requisito 5: Detectar si el base64 viene ya limpio o con prefijo
+    let base64Data = f.d.includes(',') ? f.d.split(',')[1] : f.d;
+    let mimeString = f.t || (f.d.includes(',') ? f.d.split(',')[0].split(':')[1].split(';')[0] : 'application/octet-stream');
+    
+    const byteString = atob(base64Data);
     const ab = new ArrayBuffer(byteString.length);
     const ia = new Uint8Array(ab);
     for (let i = 0; i < byteString.length; i++) {
@@ -1920,6 +1934,18 @@ function updateSelects() {
 
 }
 
+
+function autoFillNEForn() {
+    const provNome = document.getElementById('ne-prov').value.trim();
+    const fData = DB.forn.find(f => f.nome.toLowerCase() === provNome.toLowerCase());
+    if (fData) {
+        document.getElementById('ne-nif').value = fData.nif || '';
+        document.getElementById('ne-morada').value = fData.morada || '';
+        document.getElementById('ne-tel').value = fData.tel || '';
+        document.getElementById('ne-telm').value = fData.telm || '';
+        document.getElementById('ne-email').value = fData.email || '';
+    }
+}
 
 function autoNumNE() {
     if(!editingId) {
