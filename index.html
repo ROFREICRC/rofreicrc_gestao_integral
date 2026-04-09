@@ -1178,7 +1178,7 @@ function populateObraFilter(selectId, modData) {
     let obrasValidas = new Set();
     if (modData && modData.length > 0) {
         modData.forEach(item => {
-            if (item.obrNom) obrasValidas.add(item.obrNom);
+            if (item.obrNom) obrasValidas.add(item.obrNom.trim());
         });
     }
 
@@ -1186,7 +1186,7 @@ function populateObraFilter(selectId, modData) {
         let sortedObras = [...DB.obras].sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
         sortedObras.forEach(o => {
             const textoCompleto = `${o.num} - ${o.nom}`;
-            if (!modData || obrasValidas.has(textoCompleto)) {
+            if (!modData || obrasValidas.has(textoCompleto.trim())) {
                 sel.innerHTML += `<option value="${textoCompleto}">${textoCompleto}</option>`;
             }
         });
@@ -1277,7 +1277,7 @@ function renderHoras() {
         const d = hDat.split('-');
 
         if((!fMes || d[1]===fMes)
-		&& (!fObr || h.obrNom === fObr) && (!fAno || d[0]===fAno) && (!fEst || h.est===fEst) && (!fUsr || hUser.toLowerCase().includes(fUsr))) {
+		&& (!fObr || (h.obrNom || '').trim() === fObr.trim()) && (!fAno || d[0]===fAno) && (!fEst || h.est===fEst) && (!fUsr || hUser.toLowerCase().includes(fUsr))) {
             const key = `${hDat}_${hUser}`;
             if(!grouped[key]) grouped[key] = { dat: hDat, u: hUser, items: [], tot: 0 };
             let diff = (new Date(`1970-01-01T${h.fim}`) - new Date(`1970-01-01T${h.ini}`))/3600000;
@@ -1319,7 +1319,7 @@ function renderRend() {
     let groupedByObra = {};
 
     DB.rend.forEach(r => {
-        if((!fObr || r.obrNom === fObr) && (!fTask || (r.task || '').toLowerCase().includes(fTask))) {
+        if((!fObr || (r.obrNom || '').trim() === fObr.trim()) && (!fTask || (r.task || '').toLowerCase().includes(fTask))) {
             const validItems = (r.items || []).filter(i => {
                 const d = i.d ? i.d.split('-') : [];
                 const matchMes = (!fMes || d[1] === fMes);
@@ -1383,7 +1383,7 @@ function renderPed() {
 
 	let data = DB.ped.filter(p => {
         const mesData = p.dataEst ? p.dataEst.split('-')[1] : '';
-        return (!fObr || p.obrNom === fObr) &&
+        return (!fObr || (p.obrNom || '').trim() === fObr.trim()) &&
                (!fProv || (p.prov || '').toLowerCase().includes(fProv)) &&
                (!fNE || (p.neNum || '').includes(fNE)) &&
                (!fGuia || (p.guia || '').includes(fGuia)) && 
@@ -1423,7 +1423,7 @@ function renderNE() {
 	const fAno = document.getElementById('filt-ne-ano')?.value || '';
 
 	let data = DB.ne.filter(n =>
-    	(!fObr || n.obrNom === fObr) &&
+    	(!fObr || (n.obrNom || '').trim() === fObr.trim()) &&
     	(!fProv || (n.prov || '').toLowerCase().includes(fProv)) &&
     	(!fEst || n.est === fEst) && 
         (!fAno || (n.num && n.num.includes(fAno))) && 
@@ -1451,7 +1451,7 @@ function renderTar() {
     const fEst = document.getElementById('filt-tar-est') ? document.getElementById('filt-tar-est').value : '';
     const fObr = document.getElementById('filt-tar-obr')?.value || '';
 	let data = DB.tar.filter(t =>
-    	(!fObr || t.obrNom === fObr) && (!fEst || t.est === fEst));
+    	(!fObr || (t.obrNom || '').trim() === fObr.trim()) && (!fEst || t.est === fEst));
 
     data.forEach(t => {
         list.innerHTML += `
@@ -1474,7 +1474,7 @@ function renderObs() {
     const fEst = document.getElementById('filt-obs-est') ? document.getElementById('filt-obs-est').value : '';
     const fObr = document.getElementById('filt-obs-obr')?.value || '';
 	let data = DB.obs.filter(o =>
-    	(!fObr || o.obrNom === fObr) && (!fEst || o.est === fEst));
+    	(!fObr || (o.obrNom || '').trim() === fObr.trim()) && (!fEst || o.est === fEst));
 
     const agrupado = {};
 
