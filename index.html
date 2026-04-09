@@ -669,7 +669,7 @@ function addRendRow(val = { d:'', i:'', f:'', h:'0.00', q:'0.00', u:[], e:'Por A
     const rid = `rendr_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
     tr.id = rid;
     
-    const userOpts = DB.users.map(usr => `<option value="${usr.u}" ${(val.u || []).includes(usr.u) ? 'selected' : ''}>${usr.u}</option>`).join('');
+    const userOpts = '<option value="" disabled ' + (!(val.u && val.u.length) ? 'selected' : '') + '>Quem realizou a tarefa?</option>' + DB.users.map(usr => `<option value="${usr.u}" ${(val.u || []).includes(usr.u) ? 'selected' : ''}>${usr.u}</option>`).join('');
     
     tr.innerHTML = `
         <td><input type="date" class="rr-dat" value="${val.d}"></td>
@@ -735,10 +735,16 @@ async function saveRecord(mod) {
 
     // Mapeo dinámico según el módulo
     if(mod === 'obras') {
-        data.num = document.getElementById('o-num').value;
+        let valNum = document.getElementById('o-num').value.trim();
+        if (valNum !== "" && !/^[a-zA-Z0-9.]+$/.test(valNum)) return alert("O Nº de Obra não permite espaços e o único caracter especial permitido é o ponto (.).");
+        const norm = (n) => n ? n.replace(/\.(\d{2})$/, '.20$1') : "";
+        let found = DB.obras.find(o => o.id !== id && norm(o.num) === norm(valNum));
+        if (found) return alert(`Já existe uma obra registada com este número ou um equivalente (${found.num}).`);
+        data.num = valNum;
         data.nom = document.getElementById('o-nom').value;
         data.est = document.getElementById('o-est').value;
     } else if(mod === 'horas') {
+        if(!document.getElementById('h-user').value) return alert("Por favor, selecione a quem atribui esta tarefa.");
         const sel = document.getElementById('h-obr');
         data.dat = document.getElementById('h-dat').value;
         data.obrId = sel.value;
@@ -773,18 +779,22 @@ async function saveRecord(mod) {
     data.unid = document.getElementById('r-unid').value;
     
     let items = [];
+    let validacaoUtilizador = true;
     document.querySelectorAll('#rend-body tr').forEach(tr => {
         const usersSel = tr.querySelector('.rr-usr');
+        const selectedUsr = Array.from(usersSel.selectedOptions).map(o => o.value).filter(v => v !== "");
+        if(selectedUsr.length === 0) validacaoUtilizador = false;
         items.push({
             d: tr.querySelector('.rr-dat').value,
             i: tr.querySelector('.rr-ini').value,
             f: tr.querySelector('.rr-fim').value,
             h: tr.querySelector('.rr-hor').value,
             q: tr.querySelector('.rr-qtd').value,
-            u: Array.from(usersSel.selectedOptions).map(o => o.value),
+            u: Array.from(usersSel.selectedOptions).map(o => o.value).filter(v => v !== ""),
             e: tr.querySelector('.rr-est').value
         });
     });
+    if(!validacaoUtilizador) return alert("Por favor, selecione quem realizou a tarefa em todas as linhas.");
     data.items = items;
     data.totHoras = document.getElementById('rend-tot-horas').innerText;
     data.totQtd = document.getElementById('rend-tot-qtd').innerText;
@@ -987,7 +997,7 @@ async function saveNE() {
             fData = { nome: provNome, nif: nifVal, morada: moradaVal, tel: telVal, telm: telmVal, email: emailVal };
             
             if(!skipPrompts) {
-                const confirmar = confirm(`O fornecedor "${provNome}" não existe na base de dados. Deseja registrá-lo agora?\n[OK] para Registar e Continuar\n[Cancelar] para Cancelar o processo de gravação da N.E.`);
+                const confirmar = confirm(`O fornecedor "${provNome}" não existe na base de dados. Deseja registá-lo agora?\n[OK] para Registar e Continuar\n[Cancelar] para ver outras opções.`);
                 if(confirmar) {
                     const fornId = `FORN_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
                     fData.id = fornId;
@@ -998,7 +1008,8 @@ async function saveNE() {
                     fData.u_edit = user.u || user.n;
                     await db.ref(`forn/${fornId}`).set(fData);
                 } else {
-                    return; // Requisito 4: Cancela el proceso por completo
+                    const continuarSemRegisto = confirm(`Deseja continuar com a criação da Nota de Encomenda sem guardar o fornecedor na base de dados?\n[OK] para Continuar sem registar\n[Cancelar] para Cancelar todo o processo.`);
+                    if (!continuarSemRegisto) return;
                 }
             }
         } else {
@@ -1221,8 +1232,8 @@ function renderAll() {
 // Ejemplo: Render Obras con Filtro por Celda (Requisito)
 function renderObras() {
     const list = document.getElementById('list-obras'); list.innerHTML = '';
-    const fNum = document.getElementById('filt-o-num').value.toLowerCase();
-    const fNom = document.getElementById('filt-o-nom').value.toLowerCase();
+    const fNum = document.getElementById('filt-o-num').value.trim().toLowerCase();
+    const fNom = document.getElementById('filt-o-nom').value.trim().toLowerCase();
     const fEst = document.getElementById('filt-o-est').value;
 
     let data = DB.obras.filter(o => 
@@ -1256,7 +1267,7 @@ function renderHoras() {
     const fMes = document.getElementById('filt-h-mes').value;
     const fAno = document.getElementById('filt-h-ano').value;
     const fEst = document.getElementById('filt-h-est').value;
-    const fUsr = (document.getElementById('filt-h-user')?.value || "").toLowerCase();
+    const fUsr = (document.getElementById('filt-h-user')?.value || "").trim().toLowerCase();
     
     const fObr = document.getElementById('filt-h-obr')?.value || '';
 	let grouped = {};
@@ -1301,9 +1312,9 @@ function renderRend() {
     const fMes = document.getElementById('filt-r-mes')?.value;
 	const fAno = document.getElementById('filt-r-ano')?.value;
 	const fEst = document.getElementById('filt-r-est')?.value;
-	const fUsr = (document.getElementById('filt-r-user')?.value || "").toLowerCase();
+	const fUsr = (document.getElementById('filt-r-user')?.value || "").trim().toLowerCase();
 	const fObr = document.getElementById('filt-r-obr')?.value || '';
-	const fTask = (document.getElementById('filt-r-task')?.value || "").toLowerCase();
+	const fTask = (document.getElementById('filt-r-task')?.value || "").trim().toLowerCase();
 	
     let groupedByObra = {};
 
@@ -1365,7 +1376,7 @@ function renderPed() {
     const list = document.getElementById('list-ped'); list.innerHTML = '';
     const fEst = document.getElementById('filt-ped-est') ? document.getElementById('filt-ped-est').value : '';
     const fObr = document.getElementById('filt-ped-obr')?.value || '';
-	const fProv = document.getElementById('filt-ped-prov')?.value.toLowerCase() || '';
+	const fProv = document.getElementById('filt-ped-prov')?.value.trim().toLowerCase() || '';
 	const fNE = document.getElementById('filt-ped-ne')?.value || '';
 	const fGuia = document.getElementById('filt-ped-guia')?.value || '';
     const fMes = document.getElementById('filt-ped-mes')?.value || '';
@@ -1405,9 +1416,9 @@ function renderPed() {
 
 function renderNE() {
     const list = document.getElementById('list-ne'); list.innerHTML = '';
-    const fNum = document.getElementById('filt-ne-num') ? document.getElementById('filt-ne-num').value.toLowerCase() : '';
+    const fNum = document.getElementById('filt-ne-num') ? document.getElementById('filt-ne-num').value.trim().toLowerCase() : '';
     const fObr = document.getElementById('filt-ne-obr')?.value || '';
-	const fProv = document.getElementById('filt-ne-prov')?.value.toLowerCase() || '';
+	const fProv = document.getElementById('filt-ne-prov')?.value.trim().toLowerCase() || '';
 	const fEst = document.getElementById('filt-ne-est')?.value || '';
 	const fAno = document.getElementById('filt-ne-ano')?.value || '';
 
@@ -1931,7 +1942,7 @@ function updateSelects() {
 
     const userOpts = DB.users.map(u => `<option value="${u.u}">${u.u} (${u.role})</option>`).join('');
     if(document.getElementById('tar-users')) document.getElementById('tar-users').innerHTML = userOpts;
-	if(document.getElementById('h-user')) document.getElementById('h-user').innerHTML = userOpts;
+	if(document.getElementById('h-user')) document.getElementById('h-user').innerHTML = '<option value="" disabled selected>A quem atribui esta tarefa?</option>' + userOpts;
 
 	// Llenar select de proveedores en el módulo NE
     const fornOpts = DB.forn.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
@@ -2155,8 +2166,8 @@ function renderForn() {
 	const list = document.getElementById('list-forn');
     if(!list) return;
     list.innerHTML = '';
-    const fNome = document.getElementById('filt-forn-nome').value.toLowerCase();
-	const fAtiv = document.getElementById('filt-forn-ativ') ? document.getElementById('filt-forn-ativ').value.toLowerCase() : '';
+    const fNome = document.getElementById('filt-forn-nome').value.trim().toLowerCase();
+	const fAtiv = document.getElementById('filt-forn-ativ') ? document.getElementById('filt-forn-ativ').value.trim().toLowerCase() : '';
 
     let data = DB.forn.filter(f => 
     	(!fNome || (f.nome && f.nome.toLowerCase().includes(fNome))) &&
