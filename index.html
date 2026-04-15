@@ -1081,7 +1081,7 @@ async function saveNE() {
 
     // Cálculos de Tabla
     const totalSuma = items.reduce((acc, item) => acc + Number(item.t || 0), 0);
-    const tableData = items.map(i => [Number(i.q).toFixed(2), i.u, i.p, `€ ${Number(i.pr).toFixed(2)}`, `€ ${Number(i.t).toFixed(2)}`]);
+    const tableData = items.map(i => [Number(i.q).toFixed(2).replace('.', ','), i.u, i.p, `€ ${Number(i.pr).toFixed(2).replace('.', ',')}`, `€ ${Number(i.t).toFixed(2).replace('.', ',')}`]);
 
     doc.autoTable({
         head: [['Qtd','Un','Produto / Material','Preço Un.','Total']],
