@@ -1862,7 +1862,7 @@ async function downloadCurrentFiles() {
     
     const zip = new JSZip();
     item.files.forEach(f => {
-        const base64Data = f.d.split(',')[1];
+        const base64Data = f.d.includes(',') ? f.d.split(',')[1] : f.d;
         zip.file(f.n, base64Data, {base64: true});
     });
     
@@ -2008,7 +2008,7 @@ async function downloadMassFiles(mod) {
             hasFiles = true;
             item.files.forEach(f => {
                 // Extraemos la base64 quitando el prefijo de data URI
-                const base64Data = f.d.split(',')[1];
+                        const base64Data = f.d.includes(',') ? f.d.split(',')[1] : f.d;
                 // Creamos una carpeta por cada registro dentro del ZIP para que no se mezclen
                 const folderName = item.num || item.id;
                 zip.file(`${folderName}/${f.n}`, base64Data, {base64: true});
