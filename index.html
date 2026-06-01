@@ -260,7 +260,7 @@
                     <div><label>Telefone</label><input type="text" id="ne-tel"></div>
                     <div><label>Telemóvel</label><input type="text" id="ne-telm"></div>
                     <div><label>E-mail</label><input type="email" id="ne-email"></div>
-                    <div><label>Estado</label><select id="ne-est"><option>Por Solicitar</option><option>Enviado ao Fornecedor</option><option>Entregue pelo Fornecedor</option><option>Sem Efeito</option></select></div>
+                    <div><label>Estado</label><select id="ne-est"><option value="Rascunho">Rascunho</option><option value="Por Solicitar">Por Solicitar</option><option>Enviado ao Fornecedor</option><option>Entregue pelo Fornecedor</option><option>Sem Efeito</option></select></div>
                     <div class="full-w"><label>Condições de Fornecimento | Execução (Local, Data Estimada, etc.)</label><textarea id="ne-cond" rows="2"></textarea></div>
                 </div>
                 
@@ -268,13 +268,20 @@
 
                                         <thead><tr><th>Qtd</th><th>Unid</th><th>Produto / Material</th><th>Preço Un. (€)</th><th>Total (€)</th><th>Ação</th></tr></thead>
                     <tbody id="ne-body"></tbody>
-                </table>
+					<tfoot>
+						<tr>
+							<td colspan="4" style="text-align: right; font-weight: bold; background: #f1f5f9; padding: 6px;">TOTAL GERAL (€):</td>
+							<td style="padding: 6px; background: #f1f5f9;"><input type="text" id="ne-grand-total" value="0.00" readonly style="font-weight: bold; background: transparent; border: none; width: 100%;"></td>
+							<td style="background: #f1f5f9;"></td>
+						</tr>
+					</tfoot>
+				</table>
                 <button onclick="addNERow()" style="margin-top:5px; padding:6px 10px; cursor:pointer; background:var(--s); color:white; border:none; border-radius:3px">+ Adicionar Material</button>
 
                 <div class="btn-row-form">
-                    <button class="btn-main" onclick="saveNE()">Gravar e Gerar PDF</button>
-                    <button id="ne-cancel" class="btn-cancel" onclick="cancelarEdit('ne')">Cancelar Edição</button>
-                </div>
+					<button class="btn-main" onclick="saveNE(false)">Emitir e Gerar PDF</button>
+					<button type="button" style="background:var(--warn); color:white; border:none; padding:12px; border-radius:4px; cursor:pointer; font-weight:bold; flex: 1;" onclick="saveNE(true)">Guardar como Rascunho</button><button id="ne-cancel" class="btn-cancel" onclick="cancelarEdit('ne')">Cancelar Edição</button>
+				</div>
             </div>
             
             <div class="filter-bar">
@@ -900,8 +907,9 @@ function addNERow(val = { q:'', u:'', p:'', pr:'', t:'' }) {
         <td><input type="text" class="ne-p" value="${val.p}"></td>
         <td><input type="number" class="ne-pr" value="${val.pr}" oninput="calcNETotal('${rid}')"></td>
         <td><input type="number" class="ne-t" value="${val.t}" readonly></td>
-        <td><button onclick="this.parentElement.parentElement.remove()" style="color:red">✖</button></td>`;
+        <td><button onclick="this.parentElement.parentElement.remove(); updateNEGrandTotal();" style="color:red">✖</button></td>`;
     tbody.appendChild(tr);
+    updateNEGrandTotal();
 }
 
 function calcNETotal(rowId) {
@@ -909,9 +917,19 @@ function calcNETotal(rowId) {
     const q = row.querySelector('.ne-q').value || 0;
     const pr = row.querySelector('.ne-pr').value || 0;
     row.querySelector('.ne-t').value = (q * pr).toFixed(2);
+    updateNEGrandTotal();
 }
 
-async function saveNE() {
+function updateNEGrandTotal() {
+    let total = 0;
+    document.querySelectorAll('#ne-body .ne-t').forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+    const grandTotalEl = document.getElementById('ne-grand-total');
+    if (grandTotalEl) grandTotalEl.value = total.toFixed(2);
+}
+
+async function saveNE(isDraft = false) {
     const id = editingId || `NE_${Date.now()}`;
     let num = document.getElementById('ne-num').value;
     const obrSel = document.getElementById('ne-obr');
@@ -936,10 +954,17 @@ async function saveNE() {
     if(!obrSel.value || !provNome) return alert("Obra e Fornecedor são obrigatórios!");
 
     const old = DB.ne.find(x => x.id === id);
-    const novoEst = document.getElementById('ne-est').value;
+    let novoEst = document.getElementById('ne-est').value;
     
-    if (old && old.est !== novoEst) {
-        if (!confirm("Atenção: A alteração de estado desta nota de encomienda modificará automaticamente o estado dos pedidos de materiais vigentes associados (excluindo os anulados por retificação). Deseja continuar?")) return;
+    if (isDraft) {
+        novoEst = 'Rascunho';
+    } else if (novoEst === 'Rascunho') {
+        novoEst = 'Por Solicitar';
+        document.getElementById('ne-est').value = novoEst;
+    }
+
+    if (old && old.est !== novoEst && !isDraft && old.est !== 'Rascunho') {
+        if (!confirm("Atenção: A alteração de estado desta nota de encomenda modificará automaticamente o estado dos pedidos de materiais vigentes associados (excluindo os anulados por retificação). Deseja continuar?")) return;
     }
 
     let fData = DB.forn.find(f => f.nome.toLowerCase() === provNome.toLowerCase());
@@ -1129,42 +1154,40 @@ async function saveNE() {
     // Guardar en Firebase
     data.files = old && old.files ? [...old.files] : [];
 
-	if (!old || incrementaVersion) {
-    	const pdfBase64 = doc.output('datauristring');
-    	const pdfFile = { n: `${nombreReferencia}.pdf`, d: pdfBase64 };
-    	data.files.push(pdfFile);
-	}
-    
+	if ((!old || incrementaVersion || old.est === 'Rascunho') && !isDraft) {
+            const pdfBase64 = doc.output('datauristring');
+            const pdfFile = { n: `${nombreReferencia}.pdf`, d: pdfBase64 };
+            data.files.push(pdfFile);
+        }
+
     await db.ref(`ne/${id}`).set(data);
     createNotif('ne', `[NE - ${old ? 'Alterada' : 'Criada'}] Nº: ${numWithVersion} | Obra: ${data.obrNom} | Forn: ${data.prov} | Total Itens: ${items.length} | Est: ${data.est}`);
     
-    let novoPedEst = data.est;
+    if (!isDraft) {
+        let novoPedEst = data.est;
 
-    if (!old || incrementaVersion) {
-        // Si es nueva o si hubo cambios en materiales, invalidamos lo anterior y creamos lo nuevo
-        if (old) {
-            const oldPeds = DB.ped.filter(p => p.neId === id);
-            for(let op of oldPeds) {
-                await db.ref(`ped/${op.id}/est`).set('Sem Efeito');
+        if (!old || incrementaVersion || old.est === 'Rascunho') {
+            if (old && old.est !== 'Rascunho') {
+                const oldPeds = DB.ped.filter(p => p.neId === id);
+                for(let op of oldPeds) await db.ref(`ped/${op.id}/est`).set('Sem Efeito');
             }
+            for(let it of items) {
+                const pedId = `PED_${Date.now()}_${Math.floor(Math.random() * 1000 + items.indexOf(it))}`;
+                await db.ref(`ped/${pedId}`).set({
+                    id: pedId, obrId: data.obrId, obrNom: data.obrNom, prov: data.prov,
+                    mat: it.p, qtd: it.q, neNum: numWithVersion, neId: id,
+                    est: novoPedEst, u_crea: data.u_crea, d_crea: data.d_crea, notas: condText
+                });
+            }
+        } else {
+            const pedsAtivos = DB.ped.filter(p => p.neId === id && p.est !== 'Sem Efeito');
+            for(let p of pedsAtivos) await db.ref(`ped/${p.id}/est`).set(novoPedEst);
         }
-        for(let it of items) {
-            const pedId = `PED_${Date.now()}_${Math.floor(Math.random() * 1000 + items.indexOf(it))}`;
-            await db.ref(`ped/${pedId}`).set({
-                id: pedId, obrId: data.obrId, obrNom: data.obrNom, prov: data.prov,
-                mat: it.p, qtd: it.q, neNum: numWithVersion, neId: id,
-                est: novoPedEst, u_crea: data.u_crea, d_crea: data.d_crea, notas: condText
-            });
-        }
+        alert("N.E. Emitida, Guardada e PDF Gerado com Sucesso!");
     } else {
-        // Si NO hubo cambios en materiales (solo cambio de estado), actualizamos los pedidos activos
-        const pedsAtivos = DB.ped.filter(p => p.neId === id && p.est !== 'Sem Efeito');
-        for(let p of pedsAtivos) {
-            await db.ref(`ped/${p.id}/est`).set(novoPedEst);
-        }
+        alert("N.E. guardada como Rascunho! Podes continuar a editá-la mais tarde.");
     }
 
-    alert("N.E. Guardada e PDF Gerado!");
     cancelarEdit('ne');
     renderNE();
 }
