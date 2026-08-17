@@ -369,6 +369,17 @@
                 <button onclick="downloadMassFiles('ped')" class="actions b-hist">⬇️ Descarregar Documentação Simultânea</button>
                 <button onclick="deleteMassRecords('ped')" class="actions b-del">🗑️ Eliminar Selecionados</button>
                 <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #fdba74;">
+                    <label style="display:inline-block; font-size:11px;"><b>🔄 Alterar Estado Massivamente:</b></label>
+                    <select id="mass-ped-est" class="ped-status-select" onchange="colorizePedStatusSelect(this)" style="width:190px; display:inline-block; padding:6px; border-radius:4px;">
+                        <option value="">Selecionar Estado...</option>
+                        <option>Por Solicitar</option>
+                        <option>Enviado ao Fornecedor</option>
+                        <option>Entregue pelo Fornecedor</option>
+                        <option>Sem Efeito</option>
+                    </select>
+                    <button onclick="setMassPedEstado()" class="actions b-mass-status" style="padding:6px;">Gravar Estado aos Selecionados</button>
+                </div>
+                <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #fdba74;">
                     <label style="display:inline-block; font-size:11px;"><b>📅 Aplicar Data Estimada Massivamente:</b></label>
                     <input type="date" id="mass-ped-data" style="width:130px; display:inline-block;">
                     <button onclick="setMassPedData()" class="actions b-note" style="padding:6px; background:var(--acc)">Aplicar Data aos Selecionados</button>
@@ -1408,7 +1419,122 @@ function renderRend() {
         });
     });
 }
+function getPedStatusClass(status) {
+    if(status === 'Por Solicitar') return 'ped-status-por-solicitar';
+    if(status === 'Enviado ao Fornecedor') return 'ped-status-enviado';
+    if(status === 'Entregue pelo Fornecedor') return 'ped-status-entregue';
+    if(status === 'Sem Efeito') return 'ped-status-sem-efeito';
+    return '';
+}
 
+function getPedStatusBorderColor(status) {
+    if(status === 'Por Solicitar') return '#efb1af';
+    if(status === 'Enviado ao Fornecedor') return '#f3c28e';
+    if(status === 'Entregue pelo Fornecedor') return '#abd7ab';
+    if(status === 'Sem Efeito') return '#c7cbd1';
+    return '#94a3b8';
+}
+
+function colorizePedStatusSelect(selectEl) {
+    if(!selectEl) return;
+    selectEl.classList.remove('ped-status-por-solicitar','ped-status-enviado','ped-status-entregue','ped-status-sem-efeito');
+    const cls = getPedStatusClass(selectEl.value);
+    if(cls) selectEl.classList.add(cls);
+}
+
+function pedEstadoAlterado(id, selectEl) {
+    colorizePedStatusSelect(selectEl);
+    const saveBtn = document.getElementById(`ped-save-${id}`);
+    const original = DB.ped.find(p => p.id === id)?.est || '';
+    if(saveBtn) saveBtn.style.display = selectEl.value !== original ? 'inline-block' : 'none';
+}
+
+async function saveSinglePedEstado(id) {
+    const item = DB.ped.find(p => p.id === id);
+    const selectEl = document.getElementById(`ped-est-inline-${id}`);
+    const saveBtn = document.getElementById(`ped-save-${id}`);
+    if(!item || !selectEl) return;
+    if(item.neId && item.est === 'Sem Efeito') return alert('Este pedido está bloqueado porque provém de uma N.E. marcada como Sem Efeito.');
+
+    const novoEstado = selectEl.value;
+    if(!novoEstado || novoEstado === item.est) {
+        if(saveBtn) saveBtn.style.display = 'none';
+        return;
+    }
+
+    if(novoEstado === 'Entregue pelo Fornecedor' && !item.guia) {
+        return alert("O número da guia é obrigatório para o estado 'Entregue'.");
+    }
+
+    const old = {...item};
+    const now = new Date().toLocaleString();
+    const data = {...item, est: novoEstado, u_edit: user.u, d_edit: now};
+    const log = generateDiff(old, data);
+
+    await db.ref(`ped/${id}`).set(data);
+    if(log) await db.ref(`hist/${id}`).push({ u: user.u, ts: now, log, d_crea: data.d_crea });
+
+    createNotif('ped', `[PED - Alterado] Obra: ${data.obrNom} | Mat: ${data.mat} | Qtd: ${data.qtd} | Fornecedor: ${data.prov || 'N/A'} | Estado: ${novoEstado}`);
+
+    if(saveBtn) saveBtn.style.display = 'none';
+}
+
+function clearPedFilters() {
+    ['filt-ped-obr','filt-ped-prov','filt-ped-ne','filt-ped-guia','filt-ped-est','filt-ped-mes'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.value = '';
+    });
+    renderPed();
+}
+
+async function setMassPedEstado() {
+    const selected = Array.from(document.querySelectorAll(`#mod-ped .chk-mass:checked`)).map(cb => cb.value);
+    const estado = document.getElementById('mass-ped-est')?.value || '';
+
+    if(selected.length === 0) return alert('Selecione pelo menos um pedido no check-list.');
+    if(!estado) return alert('Por favor, selecione um estado para aplicar.');
+
+    const now = new Date().toLocaleString();
+    let alterados = 0;
+
+    for(const id of selected) {
+        const item = DB.ped.find(p => p.id === id);
+        if(!item || item.est === estado) continue;
+
+        if(item.neId && item.est === 'Sem Efeito') continue;
+
+        if(estado === 'Entregue pelo Fornecedor' && !item.guia) {
+            alert(`O pedido ${item.mat || item.id} não foi alterado porque o número da guia é obrigatório para o estado 'Entregue'.`);
+            continue;
+        }
+
+        const old = {...item};
+        const data = {...item, est: estado, u_edit: user.u, d_edit: now};
+        const log = generateDiff(old, data);
+
+        await db.ref(`ped/${id}`).set(data);
+
+        if(log) {
+            await db.ref(`hist/${id}`).push({
+                u: user.u,
+                ts: now,
+                log,
+                d_crea: data.d_crea
+            });
+        }
+
+        createNotif('ped', `[PED - Alterado] Obra: ${data.obrNom} | Mat: ${data.mat} | Qtd: ${data.qtd} | Fornecedor: ${data.prov || 'N/A'} | Estado: ${estado}`);
+
+        alterados++;
+    }
+
+    document.getElementById('mass-ped-est').value = '';
+    colorizePedStatusSelect(document.getElementById('mass-ped-est'));
+    document.querySelectorAll(`#mod-ped .chk-mass:checked`).forEach(cb => cb.checked = false);
+
+    alert(`${alterados} pedido(s) atualizado(s) com sucesso.`);
+}
+	
 function renderPed() {
     const list = document.getElementById('list-ped'); list.innerHTML = '';
     const fEst = document.getElementById('filt-ped-est') ? document.getElementById('filt-ped-est').value : '';
@@ -1429,8 +1555,12 @@ function renderPed() {
     });
 
     data.reverse().forEach(p => {
+        const isBlocked = p.neId && p.est === 'Sem Efeito';
+        const statusClass = getPedStatusClass(p.est);
+        const statusDisabled = isBlocked ? 'disabled' : '';
+
         list.innerHTML += `
-            <div class="card" style="border-left-color: ${p.est === 'Entregue pelo Fornecedor' ? 'var(--ok)' : 'var(--warn)'}">
+            <div class="card" style="border-left-color: ${getPedStatusBorderColor(p.est)}">
                 <input type="checkbox" class="chk-mass" value="${p.id}">
                 <div class="card-grid" style="align-items: center;">
                     <div><b>Obra:</b> ${p.obrNom}</div>
@@ -1439,7 +1569,17 @@ function renderPed() {
                     <div><b>Fornecedor:</b> ${p.prov || '---'}</div>
 					<div><b>Nº NE:</b> ${p.neNum || '---'}</div>
                     <div><b>Guia:</b> ${p.guia || 'Pendente'}</div>
-                    <div><b>Estado:</b> ${p.est}</div>
+                    <div>
+                        <b>Estado:</b>
+                        <select id="ped-est-inline-${p.id}" class="ped-status-select ${statusClass}" ${statusDisabled}
+                            onchange="pedEstadoAlterado('${p.id}', this)" style="padding:4px; border-radius:4px; font-size:10px; width:100%;">
+                            <option ${p.est==='Por Solicitar'?'selected':''}>Por Solicitar</option>
+                            <option ${p.est==='Enviado ao Fornecedor'?'selected':''}>Enviado ao Fornecedor</option>
+                            <option ${p.est==='Entregue pelo Fornecedor'?'selected':''}>Entregue pelo Fornecedor</option>
+                            <option ${p.est==='Sem Efeito'?'selected':''}>Sem Efeito</option>
+                        </select>
+                        <button id="ped-save-${p.id}" class="b-mass-status" onclick="saveSinglePedEstado('${p.id}')" style="display:none; margin-top:4px; padding:4px 8px; border:1px solid #b7d5b7; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">💾 Gravar</button>
+                    </div>
                     <div style="background:#f1f5f9; padding:5px; border-radius:4px; border:1px solid #cbd5e1;">
                         <b style="color:var(--acc); display:block; margin-bottom:2px; font-size:10px;">📅 Data Estimada:</b>
                         <input type="date" value="${p.dataEst || ''}" onblur="updateSinglePedData('${p.id}', this.value)" onkeydown="if(event.key === 'Enter') this.blur()" style="padding:4px; border:1px solid #ccc; border-radius:3px; font-size:10px; width:90%">
