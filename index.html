@@ -55,6 +55,18 @@
         .mass-mode .chk-mass { display: block; }
         .mass-mode .card { margin-left: 35px; border-left-color: var(--warn); }
         .mass-panel { display: none; background: #fff7ed; padding: 10px; border-radius: 4px; margin-bottom: 10px; border: 1px solid #fdba74; }
+		.ped-status-select { font-weight: bold; border-width: 1px; cursor: pointer; }
+		.ped-status-por-solicitar { background: #f9d6d5 !important; color: #7f1d1d; border-color: #efb1af !important; }
+		.ped-status-enviado { background: #fce3c7 !important; color: #7c2d12; border-color: #f3c28e !important; }
+		.ped-status-entregue { background: #d9efd9 !important; color: #166534; border-color: #abd7ab !important; }
+		.ped-status-sem-efeito { background: #e5e7eb !important; color: #374151; border-color: #c7cbd1 !important; }
+		#mass-ped .actions button { color: #334155; border: 1px solid rgba(100,116,139,0.22); }
+		#mass-ped .b-file { background: #d8ebf7 !important; }
+		#mass-ped .b-hist { background: #e5e0f4 !important; }
+		#mass-ped .b-del { background: #f5d6d6 !important; }
+		#mass-ped .b-note { background: #f6e2bd !important; }
+		#mass-ped .b-mass-status { background: #dcebdc !important; color: #334155 !important; }
+		#mass-ped .b-filter-clear { background: #e5e7eb !important; color: #334155 !important; }
 
         /* Modales */
         .modal { display:none; position:fixed; z-index:1000; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter: blur(2px); }
@@ -350,6 +362,7 @@
                     <option value="09">Setembro</option><option value="10">Outubro</option>
                     <option value="11">Novembro</option><option value="12">Dezembro</option>
                 </select>
+                <button onclick="clearPedFilters()" class="b-filter-clear" style="color:#334155; border:1px solid #cbd5e1; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🧹 Limpar Filtros</button>
             </div>
             <div id="mass-ped" class="mass-panel">
                 <button onclick="openMassUpload('ped')" class="actions b-file">📁 Anexar aos Selecionados</button>
