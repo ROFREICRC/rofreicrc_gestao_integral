@@ -311,6 +311,7 @@
 				<option>Sem Efeito</option>
 				</select>
 				<input type="number" id="filt-ne-ano" placeholder="Filtrar Ano..." oninput="renderNE()">
+                <button onclick="clearNEFilters()" class="b-filter-clear" style="color:#334155; border:1px solid #cbd5e1; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🧹 Limpar Filtros</button>
             </div>
             <div id="mass-ne" class="mass-panel">
                 <button onclick="openMassUpload('ne')" class="actions b-file">📁 Anexar aos Selecionados</button>
@@ -981,12 +982,25 @@ async function saveNE(isDraft = false) {
 
     const old = DB.ne.find(x => x.id === id);
     let novoEst = document.getElementById('ne-est').value;
+    let guiaNE = old?.guia || '';
     
     if (isDraft) {
         novoEst = 'Rascunho';
     } else if (novoEst === 'Rascunho') {
         novoEst = 'Por Solicitar';
         document.getElementById('ne-est').value = novoEst;
+    }
+
+    if(novoEst === 'Entregue pelo Fornecedor') {
+        guiaNE = prompt("Nº Guia (Obrigatório se Entregue):", old?.guia || '');
+
+        if(guiaNE === null) return;
+
+        guiaNE = guiaNE.trim();
+
+        if(!guiaNE) {
+            return alert("O número da guia é obrigatório para o estado 'Entregue'.");
+        }
     }
 
     if (old && old.est !== novoEst && !isDraft && old.est !== 'Rascunho') {
@@ -1086,6 +1100,7 @@ async function saveNE(isDraft = false) {
     	telm: fData.telm || '',
     	email: fData.email || '',
         est: document.getElementById('ne-est').value,
+        guia: guiaNE,
         cond: condText, notas: condText, items,
         u_edit: user.u || user.n, d_edit: new Date().toLocaleString(),
         d_crea: old ? old.d_crea : new Date().toLocaleString(),
@@ -1202,12 +1217,20 @@ async function saveNE(isDraft = false) {
                 await db.ref(`ped/${pedId}`).set({
                     id: pedId, obrId: data.obrId, obrNom: data.obrNom, prov: data.prov,
                     mat: it.p, qtd: it.q, neNum: numWithVersion, neId: id,
-                    est: novoPedEst, u_crea: data.u_crea, d_crea: data.d_crea, notas: condText
+                    est: novoPedEst,
+                    guia: novoPedEst === 'Entregue pelo Fornecedor' ? (data.guia || '') : '',
+                    u_crea: data.u_crea, d_crea: data.d_crea, notas: condText
                 });
             }
         } else {
             const pedsAtivos = DB.ped.filter(p => p.neId === id && p.est !== 'Sem Efeito');
-            for(let p of pedsAtivos) await db.ref(`ped/${p.id}/est`).set(novoPedEst);
+
+            for(let p of pedsAtivos) {
+                await db.ref(`ped/${p.id}`).update({
+                    est: novoPedEst,
+                    guia: novoPedEst === 'Entregue pelo Fornecedor' ? (data.guia || '') : p.guia
+                });
+            }
         }
         alert("N.E. Emitida, Guardada e PDF Gerado com Sucesso!");
     } else {
@@ -1443,6 +1466,103 @@ function colorizePedStatusSelect(selectEl) {
     if(cls) selectEl.classList.add(cls);
 }
 
+function neEstadoAlterado(id, selectEl) {
+    colorizePedStatusSelect(selectEl);
+
+    const saveBtn = document.getElementById(`ne-save-${id}`);
+    const original = DB.ne.find(n => n.id === id)?.est || '';
+
+    if(saveBtn) {
+        saveBtn.style.display = selectEl.value !== original ? 'inline-block' : 'none';
+    }
+}
+
+async function saveSingleNEEstado(id) {
+    const item = DB.ne.find(n => n.id === id);
+    const selectEl = document.getElementById(`ne-est-inline-${id}`);
+    const saveBtn = document.getElementById(`ne-save-${id}`);
+
+    if(!item || !selectEl) return;
+
+    const novoEstado = selectEl.value;
+
+    if(!novoEstado || novoEstado === item.est) {
+        if(saveBtn) saveBtn.style.display = 'none';
+        return;
+    }
+
+    let guia = item.guia || '';
+
+    if(novoEstado === 'Entregue pelo Fornecedor') {
+        guia = prompt("Nº Guia (Obrigatório se Entregue):", item.guia || '');
+
+        if(guia === null) {
+            selectEl.value = item.est;
+            colorizePedStatusSelect(selectEl);
+            if(saveBtn) saveBtn.style.display = 'none';
+            return;
+        }
+
+        guia = guia.trim();
+
+        if(!guia) {
+            alert("O número da guia é obrigatório para o estado 'Entregue'.");
+            selectEl.value = item.est;
+            colorizePedStatusSelect(selectEl);
+            if(saveBtn) saveBtn.style.display = 'none';
+            return;
+        }
+    }
+
+    if(novoEstado === 'Rascunho') {
+        alert("O estado 'Rascunho' não será transferido para os Pedidos de Materiais.");
+    }
+
+    const old = {...item};
+    const now = new Date().toLocaleString();
+
+    const data = {
+        ...item,
+        est: novoEstado,
+        guia: guia,
+        u_edit: user.u || user.n,
+        d_edit: now
+    };
+
+    await db.ref(`ne/${id}`).set(data);
+
+    const pedsAtivos = DB.ped.filter(p => p.neId === id && p.est !== 'Sem Efeito');
+
+    if(novoEstado !== 'Rascunho') {
+        for(const p of pedsAtivos) {
+            await db.ref(`ped/${p.id}`).update({
+                est: novoEstado,
+                guia: novoEstado === 'Entregue pelo Fornecedor' ? guia : p.guia,
+                u_edit: user.u || user.n,
+                d_edit: now
+            });
+        }
+    }
+
+    const log = generateDiff(old, data);
+
+    if(log) {
+        await db.ref(`hist/${id}`).push({
+            u: user.u || user.n,
+            ts: now,
+            log,
+            d_crea: data.d_crea
+        });
+    }
+
+    createNotif('ne', `[NE - Alterada] Nº: ${data.num} | Obra: ${data.obrNom} | Forn: ${data.prov} | Estado: ${novoEstado}`);
+
+    if(saveBtn) saveBtn.style.display = 'none';
+
+    renderNE();
+    renderPed();
+}
+
 function pedEstadoAlterado(id, selectEl) {
     colorizePedStatusSelect(selectEl);
     const saveBtn = document.getElementById(`ped-save-${id}`);
@@ -1503,6 +1623,11 @@ async function saveSinglePedEstado(id) {
     createNotif('ped', `[PED - Alterado] Obra: ${data.obrNom} | Mat: ${data.mat} | Qtd: ${data.qtd} | Fornecedor: ${data.prov || 'N/A'} | Estado: ${novoEstado}`);
 
     if(saveBtn) saveBtn.style.display = 'none';
+
+    await syncNEEstadoFromPedidos(item.neId);
+
+    renderPed();
+    renderNE();
 }
 
 function clearPedFilters() {
@@ -1511,6 +1636,58 @@ function clearPedFilters() {
         if(el) el.value = '';
     });
     renderPed();
+}
+
+async function syncNEEstadoFromPedidos(neId) {
+    if(!neId) return;
+
+    const ne = DB.ne.find(n => n.id === neId);
+    if(!ne) return;
+
+    const pedsAtivos = DB.ped.filter(p => p.neId === neId && p.est !== 'Sem Efeito');
+
+    if(pedsAtivos.length === 0) return;
+
+    const estados = [...new Set(pedsAtivos.map(p => p.est))];
+
+    if(estados.length !== 1) return;
+
+    const estadoComum = estados[0];
+
+    if(!estadoComum || estadoComum === 'Rascunho') return;
+
+    if(ne.est === estadoComum) return;
+
+    const now = new Date().toLocaleString();
+
+    await db.ref(`ne/${neId}`).update({
+        est: estadoComum,
+        u_edit: user.u || user.n,
+        d_edit: now
+    });
+
+    const neAtualizada = {
+        ...ne,
+        est: estadoComum,
+        u_edit: user.u || user.n,
+        d_edit: now
+    };
+
+    const log = generateDiff(ne, neAtualizada);
+
+    if(log) {
+        await db.ref(`hist/${neId}`).push({
+            u: user.u || user.n,
+            ts: now,
+            log,
+            d_crea: ne.d_crea
+        });
+    }
+
+    createNotif(
+        'ne',
+        `[NE - Estado Sincronizado] Nº: ${ne.num} | Obra: ${ne.obrNom} | Estado: ${estadoComum}`
+    );
 }
 
 async function setMassPedEstado() {
@@ -1576,9 +1753,25 @@ async function setMassPedEstado() {
 
     document.getElementById('mass-ped-est').value = '';
     colorizePedStatusSelect(document.getElementById('mass-ped-est'));
+
+    const neIdsParaSincronizar = [
+        ...new Set(
+            selected
+                .map(id => DB.ped.find(p => p.id === id)?.neId)
+                .filter(id => id)
+        )
+    ];
+
+    for(const neId of neIdsParaSincronizar) {
+        await syncNEEstadoFromPedidos(neId);
+    }
+
     document.querySelectorAll(`#mod-ped .chk-mass:checked`).forEach(cb => cb.checked = false);
 
     alert(`${alterados} pedido(s) atualizado(s) com sucesso.`);
+    
+    renderPed();
+    renderNE();
 }
 	
 function renderPed() {
@@ -1639,6 +1832,15 @@ function renderPed() {
 }
 
 
+function clearNEFilters() {
+    ['filt-ne-num','filt-ne-obr','filt-ne-prov','filt-ne-est','filt-ne-ano'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.value = '';
+    });
+
+    renderNE();
+}
+
 function renderNE() {
     const list = document.getElementById('list-ne'); list.innerHTML = '';
     const fNum = document.getElementById('filt-ne-num') ? document.getElementById('filt-ne-num').value.trim().toLowerCase() : '';
@@ -1654,15 +1856,35 @@ function renderNE() {
         (!fAno || (n.num && n.num.includes(fAno))) && 
         n.num && n.num.toLowerCase().includes(fNum));
 
-    data.reverse().forEach(n => {
+       data.reverse().forEach(n => {
+        const statusClass = getPedStatusClass(n.est);
+
         list.innerHTML += `
-            <div class="card">
+            <div class="card" style="border-left-color: ${getPedStatusBorderColor(n.est)}">
                 <input type="checkbox" class="chk-mass" value="${n.id}">
-                <div class="card-grid">
+                <div class="card-grid" style="align-items:center;">
                     <div><b>Nº NE:</b> ${n.num}</div>
                     <div><b>Obra:</b> ${n.obrNom}</div>
                     <div><b>Fornecedor:</b> ${n.prov}</div>
-                    <div><b>Estado:</b> ${n.est}</div>
+                    <div>
+                        <b>Estado:</b>
+                        <select id="ne-est-inline-${n.id}" class="ped-status-select ${statusClass}"
+                            onchange="neEstadoAlterado('${n.id}', this)"
+                            style="padding:4px; border-radius:4px; font-size:10px; width:100%;">
+                            <option value="Rascunho" ${n.est==='Rascunho'?'selected':''}>Rascunho</option>
+                            <option value="Por Solicitar" ${n.est==='Por Solicitar'?'selected':''}>Por Solicitar</option>
+                            <option value="Enviado ao Fornecedor" ${n.est==='Enviado ao Fornecedor'?'selected':''}>Enviado ao Fornecedor</option>
+                            <option value="Entregue pelo Fornecedor" ${n.est==='Entregue pelo Fornecedor'?'selected':''}>Entregue pelo Fornecedor</option>
+                            <option value="Sem Efeito" ${n.est==='Sem Efeito'?'selected':''}>Sem Efeito</option>
+                        </select>
+
+                        <button id="ne-save-${n.id}"
+                            onclick="saveSingleNEEstado('${n.id}')"
+                            class="b-mass-status"
+                            style="display:none; margin-top:4px; padding:4px 8px; border:1px solid #b7d5b7; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">
+                            💾 Gravar
+                        </button>
+                    </div>
                     <div><b>Itens:</b> ${n.items ? n.items.length : 0}</div>
                 </div>
                 ${getCardButtons('ne', n)}
