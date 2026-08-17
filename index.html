@@ -343,8 +343,9 @@
                 <button onclick="exportarExcel('ped')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">📊 Excel</button>
                 <select id="filt-ped-obr" onchange="renderPed()"><option value="">Todas as Obras</option></select>
 				<input type="text" id="filt-ped-prov" placeholder="Fornecedor" oninput="renderPed()">
-				<input type="text" id="filt-ped-ne" placeholder="Nº NE" oninput="renderPed()">
-				<input type="text" id="filt-ped-guia" placeholder="Guia" oninput="renderPed()">
+ 				<input type="text" id="filt-ped-mat" placeholder="Material" oninput="renderPed()">
+ 				<input type="text" id="filt-ped-ne" placeholder="Nº NE" oninput="renderPed()">
+ 				<input type="text" id="filt-ped-guia" placeholder="Guia" oninput="renderPed()">
 
 								<select id="filt-ped-est" onchange="renderPed()">
 				    <option value="">Todos os Estados</option>
@@ -1462,13 +1463,38 @@ async function saveSinglePedEstado(id) {
         return;
     }
 
-    if(novoEstado === 'Entregue pelo Fornecedor' && !item.guia) {
-        return alert("O número da guia é obrigatório para o estado 'Entregue'.");
+    let guia = item.guia || '';
+
+    if(novoEstado === 'Entregue pelo Fornecedor') {
+        guia = prompt("Nº Guia (Obrigatório se Entregue):", item.guia || '');
+
+        if(guia === null) {
+            selectEl.value = item.est;
+            colorizePedStatusSelect(selectEl);
+            if(saveBtn) saveBtn.style.display = 'none';
+            return;
+        }
+
+        guia = guia.trim();
+
+        if(!guia) {
+            alert("O número da guia é obrigatório para o estado 'Entregue'.");
+            selectEl.value = item.est;
+            colorizePedStatusSelect(selectEl);
+            if(saveBtn) saveBtn.style.display = 'none';
+            return;
+        }
     }
 
     const old = {...item};
     const now = new Date().toLocaleString();
-    const data = {...item, est: novoEstado, u_edit: user.u, d_edit: now};
+    const data = {
+        ...item,
+        est: novoEstado,
+        guia: guia,
+        u_edit: user.u,
+        d_edit: now
+    };
     const log = generateDiff(old, data);
 
     await db.ref(`ped/${id}`).set(data);
@@ -1480,7 +1506,7 @@ async function saveSinglePedEstado(id) {
 }
 
 function clearPedFilters() {
-    ['filt-ped-obr','filt-ped-prov','filt-ped-ne','filt-ped-guia','filt-ped-est','filt-ped-mes'].forEach(id => {
+    ['filt-ped-obr','filt-ped-prov','filt-ped-mat','filt-ped-ne','filt-ped-guia','filt-ped-est','filt-ped-mes'].forEach(id => {
         const el = document.getElementById(id);
         if(el) el.value = '';
     });
@@ -1493,6 +1519,20 @@ async function setMassPedEstado() {
 
     if(selected.length === 0) return alert('Selecione pelo menos um pedido no check-list.');
     if(!estado) return alert('Por favor, selecione um estado para aplicar.');
+
+    let guia = '';
+
+    if(estado === 'Entregue pelo Fornecedor') {
+        guia = prompt("Nº Guia (Obrigatório se Entregue):", '');
+
+        if(guia === null) return;
+
+        guia = guia.trim();
+
+        if(!guia) {
+            return alert("O número da guia é obrigatório para o estado 'Entregue'.");
+        }
+    }
 
     const now = new Date().toLocaleString();
     let alterados = 0;
@@ -1509,7 +1549,13 @@ async function setMassPedEstado() {
         }
 
         const old = {...item};
-        const data = {...item, est: estado, u_edit: user.u, d_edit: now};
+        const data = {
+            ...item,
+            est: estado,
+            guia: estado === 'Entregue pelo Fornecedor' ? guia : item.guia,
+            u_edit: user.u,
+            d_edit: now
+        };
         const log = generateDiff(old, data);
 
         await db.ref(`ped/${id}`).set(data);
@@ -1540,6 +1586,7 @@ function renderPed() {
     const fEst = document.getElementById('filt-ped-est') ? document.getElementById('filt-ped-est').value : '';
     const fObr = document.getElementById('filt-ped-obr')?.value || '';
 	const fProv = document.getElementById('filt-ped-prov')?.value.trim().toLowerCase() || '';
+	const fMat = document.getElementById('filt-ped-mat')?.value.trim().toLowerCase() || '';
 	const fNE = document.getElementById('filt-ped-ne')?.value || '';
 	const fGuia = document.getElementById('filt-ped-guia')?.value || '';
     const fMes = document.getElementById('filt-ped-mes')?.value || '';
@@ -1548,6 +1595,7 @@ function renderPed() {
         const mesData = p.dataEst ? p.dataEst.split('-')[1] : '';
         return (!fObr || (p.obrNom || '').trim() === fObr.trim()) &&
                (!fProv || (p.prov || '').toLowerCase().includes(fProv)) &&
+               (!fMat || (p.mat || '').toLowerCase().includes(fMat)) &&
                (!fNE || (p.neNum || '').includes(fNE)) &&
                (!fGuia || (p.guia || '').includes(fGuia)) && 
                (!fEst || p.est === fEst) &&
