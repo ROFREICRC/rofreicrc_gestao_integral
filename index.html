@@ -1186,7 +1186,7 @@ async function saveNE(isDraft = false) {
     doc.setFontSize(10).setFont(undefined, 'normal');
     const splitCond = doc.splitTextToSize(condText || 'N/A', 180);
 
-    const espacoDisponivel = footerY - 15 - condTextStartY;
+    const espacoDisponivel = footerY - 3 - condTextStartY;
     const linhasDisponiveis = Math.max(0, Math.floor(espacoDisponivel / condLineHeight));
 
     const linhasPrimeiraPagina = splitCond.slice(0, linhasDisponiveis);
