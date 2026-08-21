@@ -76,6 +76,86 @@
         .ne-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
         .ne-table th, .ne-table td { border: 1px solid #cbd5e1; padding: 6px; }
         .ne-table th { background: #f1f5f9; text-align: left; }
+
+        .consulta-status-select {
+            font-weight: bold;
+            border-width: 1px;
+            cursor: pointer;
+        }
+
+        .consulta-status-pendente {
+            background: #f8e8b8 !important;
+            color: #78350f;
+            border-color: #e8cf91 !important;
+        }
+
+        .consulta-status-enviada {
+            background: #fce3c7 !important;
+            color: #7c2d12;
+            border-color: #f3c28e !important;
+        }
+
+        .consulta-status-entregue {
+            background: #d9efd9 !important;
+            color: #166534;
+            border-color: #abd7ab !important;
+        }
+
+        .consulta-status-sem-efeito {
+            background: #e5e7eb !important;
+            color: #374151;
+            border-color: #c7cbd1 !important;
+        }
+
+        .consulta-status-rascunho {
+            background: #e5e0f4 !important;
+            color: #4c1d95;
+            border-color: #cbc0e6 !important;
+        }
+
+        .consulta-gestao {
+            margin-top: 12px;
+            padding: 15px;
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+        }
+
+        .consulta-comparativo {
+            overflow-x: auto;
+            margin-top: 12px;
+        }
+
+        .consulta-comparativo table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+
+        .consulta-comparativo th,
+        .consulta-comparativo td {
+            border: 1px solid #cbd5e1;
+            padding: 5px;
+            vertical-align: middle;
+        }
+
+        .consulta-comparativo th {
+            background: #e2e8f0;
+        }
+
+        .consulta-preco {
+            width: 85px !important;
+            min-width: 85px !important;
+            padding: 4px !important;
+            font-size: 10px !important;
+        }
+
+        .consulta-adjudicado {
+            width: 170px !important;
+            min-width: 170px !important;
+            padding: 4px !important;
+            font-size: 10px !important;
+        }
     </style>
 	<link rel="icon" href="data:,">
 </head>
@@ -97,6 +177,7 @@
         <button id="nav-rend" onclick="showMod('rend')">📊 RENDIMENTOS</button>
 		<button id="nav-horas" onclick="showMod('horas')">🕒 HORAS</button>
         <button id="nav-obs" onclick="showMod('obs')">📝 OBS</button>
+		<button id="nav-consultas" onclick="showMod('consultas')">🔎 CONSULTAS</button>
         <button id="nav-ne" onclick="showMod('ne')">📄 N.E.</button>
         <button id="nav-ped" onclick="showMod('ped')">🛒 PEDIDOS</button>
         <button id="nav-tar" onclick="showMod('tar')">✅ TAREFAS</button>
@@ -318,7 +399,142 @@
                 <button onclick="downloadMassFiles('ne')" class="actions b-hist">⬇️ Descarregar Documentação Simultânea</button>
                 <button onclick="deleteMassRecords('ne')" class="actions b-del">🗑️ Eliminar Selecionados</button>
             </div>
-            <div id="list-ne"></div>
+                       <div id="list-ne"></div>
+        </section>
+
+        <section id="mod-consultas" class="mod-sec">
+            <div class="form-box">
+                <h3>🔎 Consultas a Fornecedores</h3>
+
+                <div style="border:1px solid #cbd5e1; border-radius:6px; padding:12px; margin-bottom:15px; background:#f8fafc;">
+                    <h4 style="margin:0 0 10px 0; color:var(--p);">1. Informações gerais</h4>
+
+                    <div class="grid">
+                        <div>
+                            <label>Nº Consulta</label>
+                            <input type="text" id="consulta-num" readonly style="background:#f1f5f9">
+                        </div>
+
+                        <div>
+                            <label>Nº Obra (Apenas Em Execução)</label>
+                            <select id="consulta-obr"></select>
+                        </div>
+
+                        <div class="full-w">
+                            <label>Descrição curta da consulta</label>
+                            <input type="text" id="consulta-desc" placeholder="Descreva brevemente o que pretende consultar aos fornecedores">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="border:1px solid #cbd5e1; border-radius:6px; padding:12px; margin-bottom:15px; background:#fff;">
+                    <h4 style="margin:0 0 10px 0; color:var(--p);">2. Controlo da gestão das consultas</h4>
+
+                    <table class="ne-table" style="margin-bottom:10px;">
+                        <thead>
+                            <tr>
+                                <th>Fornecedor</th>
+                                <th>Data de Envio</th>
+                                <th>Data de Receção</th>
+                                <th>Observações</th>
+                                <th>PDF</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="consulta-forn-body"></tbody>
+                    </table>
+
+                    <button type="button" onclick="addConsultaFornecedorRow()" style="margin-top:5px; padding:6px 10px; cursor:pointer; background:var(--s); color:white; border:none; border-radius:3px">
+                        + Adicionar Fornecedor
+                    </button>
+                </div>
+
+                <div style="border:1px solid #cbd5e1; border-radius:6px; padding:12px; margin-bottom:15px; background:#fff;">
+                    <h4 style="margin:0 0 10px 0; color:var(--p);">3. Produto / Material</h4>
+
+                    <table class="ne-table">
+                        <thead>
+                            <tr>
+                                <th>Qtd</th>
+                                <th>Unid</th>
+                                <th>Produto / Material</th>
+                                <th>Preço Un. (€)</th>
+                                <th>Total (€)</th>
+                                <th>Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="consulta-body"></tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4" style="text-align:right; font-weight:bold; background:#f1f5f9; padding:6px;">
+                                    TOTAL GERAL (€):
+                                </td>
+                                <td style="padding:6px; background:#f1f5f9;">
+                                    <input type="text" id="consulta-grand-total" value="0.00" readonly style="font-weight:bold; background:transparent; border:none; width:100%;">
+                                </td>
+                                <td style="background:#f1f5f9;"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <button type="button" onclick="addConsultaMaterialRow()" style="margin-top:5px; padding:6px 10px; cursor:pointer; background:var(--s); color:white; border:none; border-radius:3px">
+                        + Adicionar Material
+                    </button>
+                </div>
+
+                <div class="btn-row-form">
+                    <button class="btn-main" onclick="saveConsulta(false)">Emitir e Gerar PDF</button>
+                    <button type="button" style="background:var(--warn); color:white; border:none; padding:12px; border-radius:4px; cursor:pointer; font-weight:bold; flex:1;" onclick="saveConsulta(true)">
+                        Guardar como Rascunho
+                    </button>
+                    <button id="consulta-cancel" class="btn-cancel" onclick="cancelarEdit('consultas')">
+                        Cancelar Edição
+                    </button>
+                </div>
+            </div>
+
+            <div class="filter-bar">
+                <button onclick="toggleMass('consultas')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">
+                    ☑️ Seleção Check-list
+                </button>
+
+                <button onclick="exportarExcel('consultas')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">
+                    📊 Excel
+                </button>
+
+                <input type="text" id="filt-consulta-num" placeholder="Nº Consulta" oninput="renderConsultas()">
+
+                <select id="filt-consulta-obr" onchange="renderConsultas()">
+                    <option value="">Todas as Obras</option>
+                </select>
+
+                <input type="text" id="filt-consulta-prov" placeholder="Fornecedor" oninput="renderConsultas()">
+
+                <input type="text" id="filt-consulta-mat" placeholder="Material" oninput="renderConsultas()">
+
+                <input type="text" id="filt-consulta-desc" placeholder="Descrição" oninput="renderConsultas()">
+
+                <select id="filt-consulta-est" onchange="renderConsultas()">
+                    <option value="">Todos os Estados</option>
+                    <option>Pendente de solicitar ao fornecedor</option>
+                    <option>Enviada ao fornecedor</option>
+                    <option>Entregue pelo fornecedor</option>
+                    <option>Sem Efeito</option>
+                    <option>Rascunho</option>
+                </select>
+
+                <button onclick="clearConsultaFilters()" class="b-filter-clear" style="color:#334155; border:1px solid #cbd5e1; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;">
+                    🧹 Limpar Filtros
+                </button>
+            </div>
+
+            <div id="mass-consultas" class="mass-panel">
+                <button onclick="openMassUpload('consultas')" class="actions b-file">📁 Anexar aos Selecionados</button>
+                <button onclick="downloadMassFiles('consultas')" class="actions b-hist">⬇️ Descarregar Documentação Simultânea</button>
+                <button onclick="deleteMassRecords('consultas')" class="actions b-del">🗑️ Eliminar Selecionados</button>
+            </div>
+
+            <div id="list-consultas"></div>
         </section>
 
         <section id="mod-ped" class="mod-sec">
@@ -561,7 +777,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // VARIABLES GLOBALES
-let DB = { obras:[], rend:[], horas:[], ne:[], ped:[], tar:[], obs:[], users:[], notif:[], hist:{}, forn:[], empresa:{} };
+let DB = { obras:[], rend:[], horas:[], ne:[], consultas:[], ped:[], tar:[], obs:[], users:[], notif:[], hist:{}, forn:[], empresa:{} };
 let user = null; 
 let currentMod = 'obras'; 
 let editingId = null; 
@@ -628,7 +844,7 @@ function triggerRender() {
 
 // Sincronización en Tiempo Real (Optimizada para Base64 e Bandwidth)
 function sync() {
-    const modules = ['obras', 'rend', 'horas', 'ne', 'ped', 'tar', 'obs', 'users', 'notif', 'forn'];
+    const modules = ['obras', 'rend', 'horas', 'ne', 'consultas', 'ped', 'tar', 'obs', 'users', 'notif', 'forn'];
     
     modules.forEach(mod => {
         db.ref(mod).on('child_added', snap => {
@@ -923,6 +1139,96 @@ function generateDiff(oldData, newData) {
 
 // --- LÓGICA ESPECÍFICA N.E. ---
 let neRowIdx = 0;
+
+let consultaFornecedorRowIdx = 0;
+
+function addConsultaFornecedorRow(val = {
+    nome: '',
+    fornecedorId: '',
+    d_envio: '',
+    d_resposta: '',
+    obs: '',
+    est: 'Pendente de solicitar ao fornecedor'
+}) {
+    const tbody = document.getElementById('consulta-forn-body');
+    if(!tbody) return;
+
+    const rid = `consulta_for_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+
+    const fornOptions = DB.forn.map(f =>
+        `<option value="${f.nome}"></option>`
+    ).join('');
+
+    const statusClass = getConsultaStatusClass(val.est);
+
+    const tr = document.createElement('tr');
+    tr.id = rid;
+
+    tr.innerHTML = `
+        <td>
+            <input type="text"
+                   class="consulta-forn-nome"
+                   list="lista-forn-sug"
+                   value="${val.nome || ''}"
+                   placeholder="Fornecedor..."
+                   style="width:100%;">
+        </td>
+
+        <td>
+            <input type="text"
+                   class="consulta-d-envio"
+                   value="${val.d_envio || ''}"
+                   readonly
+                   style="width:100%; background:#f1f5f9;">
+        </td>
+
+        <td>
+            <input type="text"
+                   class="consulta-d-resposta"
+                   value="${val.d_resposta || ''}"
+                   readonly
+                   style="width:100%; background:#f1f5f9;">
+        </td>
+
+        <td>
+            <textarea class="consulta-forn-obs"
+                      rows="2"
+                      style="width:100%; resize:vertical;">${val.obs || ''}</textarea>
+        </td>
+
+        <td style="text-align:center;">
+            <button type="button"
+                    onclick="alert('O PDF será disponibilizado depois de guardar a Consulta.')"
+                    style="border:none; background:none; cursor:pointer; font-size:18px;">
+                📄
+            </button>
+        </td>
+
+        <td>
+            <select class="consulta-forn-est ${statusClass}"
+                    onchange="consultaEstadoFornecedorAlterado(this)"
+                    style="width:100%; min-width:190px;">
+                <option ${val.est === 'Pendente de solicitar ao fornecedor' ? 'selected' : ''}>
+                    Pendente de solicitar ao fornecedor
+                </option>
+                <option ${val.est === 'Enviada ao fornecedor' ? 'selected' : ''}>
+                    Enviada ao fornecedor
+                </option>
+                <option ${val.est === 'Entregue pelo fornecedor' ? 'selected' : ''}>
+                    Entregue pelo fornecedor
+                </option>
+                <option ${val.est === 'Sem Efeito' ? 'selected' : ''}>
+                    Sem Efeito
+                </option>
+                <option ${val.est === 'Rascunho' ? 'selected' : ''}>
+                    Rascunho
+                </option>
+            </select>
+        </td>
+    `;
+
+    tbody.appendChild(tr);
+}
 function addNERow(val = { q:'', u:'', p:'', pr:'', t:'' }) {
     const tbody = document.getElementById('ne-body');
     const tr = document.createElement('tr');
@@ -937,6 +1243,88 @@ function addNERow(val = { q:'', u:'', p:'', pr:'', t:'' }) {
         <td><button onclick="this.parentElement.parentElement.remove(); updateNEGrandTotal();" style="color:red">✖</button></td>`;
     tbody.appendChild(tr);
     updateNEGrandTotal();
+}
+
+function addConsultaMaterialRow(val = { q:'', u:'', p:'', pr:'', t:'' }) {
+    const tbody = document.getElementById('consulta-body');
+    if(!tbody) return;
+
+    const rid = `consultmat_${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+
+    const tr = document.createElement('tr');
+    tr.id = rid;
+
+    tr.innerHTML = `
+        <td>
+            <input type="number"
+                   class="consulta-q"
+                   value="${val.q}"
+                   oninput="calcConsultaTotal('${rid}')">
+        </td>
+
+        <td>
+            <input type="text"
+                   class="consulta-u"
+                   value="${val.u}">
+        </td>
+
+        <td>
+            <input type="text"
+                   class="consulta-p"
+                   value="${val.p}">
+        </td>
+
+        <td>
+            <input type="number"
+                   class="consulta-pr"
+                   value="${val.pr}"
+                   oninput="calcConsultaTotal('${rid}')">
+        </td>
+
+        <td>
+            <input type="number"
+                   class="consulta-t"
+                   value="${val.t}"
+                   readonly>
+        </td>
+
+        <td>
+            <button type="button"
+                    onclick="this.parentElement.parentElement.remove(); updateConsultaGrandTotal();"
+                    style="color:red;">
+                ✖
+            </button>
+        </td>
+    `;
+
+    tbody.appendChild(tr);
+    updateConsultaGrandTotal();
+}
+
+function calcConsultaTotal(rowId) {
+    const row = document.getElementById(rowId);
+    if(!row) return;
+
+    const q = row.querySelector('.consulta-q').value || 0;
+    const pr = row.querySelector('.consulta-pr').value || 0;
+
+    row.querySelector('.consulta-t').value = (q * pr).toFixed(2);
+
+    updateConsultaGrandTotal();
+}
+
+function updateConsultaGrandTotal() {
+    let total = 0;
+
+    document.querySelectorAll('#consulta-body .consulta-t').forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+
+    const el = document.getElementById('consulta-grand-total');
+
+    if(el) {
+        el.value = total.toFixed(2);
+    }
 }
 
 function calcNETotal(rowId) {
@@ -956,7 +1344,134 @@ function updateNEGrandTotal() {
     if (grandTotalEl) grandTotalEl.value = total.toFixed(2);
 }
 
-async function saveNE(isDraft = false) {
+async function saveConsulta(isDraft = false) {
+    const id = `CONS_${Date.now()}`;
+    const num = document.getElementById('consulta-num').value;
+    const obrSel = document.getElementById('consulta-obr');
+    const descricao = document.getElementById('consulta-desc').value.trim();
+
+    if(!num) {
+        autoNumConsulta();
+        return alert("O número da Consulta não foi gerado.");
+    }
+
+    if(!obrSel.value) {
+        return alert("A Obra é obrigatória!");
+    }
+
+    if(!descricao) {
+        return alert("A descrição curta da Consulta é obrigatória!");
+    }
+
+    const fornecedores = [];
+
+    document.querySelectorAll('#consulta-forn-body tr').forEach(tr => {
+        const nome = tr.querySelector('.consulta-forn-nome')?.value.trim();
+
+        if(!nome) return;
+
+        const fornecedor = DB.forn.find(f =>
+            (f.nome || '').toLowerCase() === nome.toLowerCase()
+        );
+
+        fornecedores.push({
+            nome,
+            fornecedorId: fornecedor ? fornecedor.id : null,
+            d_envio: tr.querySelector('.consulta-d-envio')?.value || '',
+            d_resposta: tr.querySelector('.consulta-d-resposta')?.value || '',
+            obs: tr.querySelector('.consulta-forn-obs')?.value || '',
+            est: tr.querySelector('.consulta-forn-est')?.value || 'Pendente de solicitar ao fornecedor',
+            precos: {}
+        });
+    });
+
+    if(fornecedores.length === 0) {
+        return alert("Adicione pelo menos um fornecedor à Consulta.");
+    }
+
+    let items = [];
+
+    document.querySelectorAll('#consulta-body tr').forEach(tr => {
+        const q = tr.querySelector('.consulta-q')?.value;
+        const p = tr.querySelector('.consulta-p')?.value;
+
+        if(q && p) {
+            items.push({
+                q,
+                u: tr.querySelector('.consulta-u')?.value || '',
+                p,
+                pr: tr.querySelector('.consulta-pr')?.value || '',
+                t: tr.querySelector('.consulta-t')?.value || ''
+            });
+        }
+    });
+
+    if(items.length === 0) {
+        return alert("Adicione pelo menos um Produto / Material.");
+    }
+
+    const now = new Date().toLocaleString();
+
+    fornecedores.forEach(f => {
+        if(f.est === 'Enviada ao fornecedor' && !f.d_envio) {
+            f.d_envio = now;
+        }
+
+        if(f.est === 'Entregue pelo fornecedor' && !f.d_resposta) {
+            f.d_resposta = now;
+        }
+    });
+
+    const estados = fornecedores.map(f => f.est);
+    let estadoGlobal = 'Rascunho';
+
+    if(!isDraft) {
+        if(estados.every(e => e === 'Pendente de solicitar ao fornecedor')) {
+            estadoGlobal = 'Pendente de solicitar ao fornecedor';
+        } else {
+            estadoGlobal = estados[0] || 'Pendente de solicitar ao fornecedor';
+        }
+    }
+
+    const data = {
+        id,
+        num,
+        obrId: obrSel.value,
+        obrNom: obrSel.options[obrSel.selectedIndex].text,
+        descricao,
+        fornecedores,
+        items,
+        est: isDraft ? 'Rascunho' : estadoGlobal,
+        u_crea: user.u || user.n,
+        d_crea: now,
+        u_edit: user.u || user.n,
+        d_edit: now,
+        notas: ''
+    };
+
+    await db.ref(`consultas/${id}`).set(data);
+
+    await db.ref(`hist/${id}`).push({
+        u: user.u || user.n,
+        ts: now,
+        log: '<b>Criação inicial da Consulta.</b>',
+        d_crea: now
+    });
+
+    createNotif(
+        'consultas',
+        `[CONSULTA - ${isDraft ? 'Rascunho' : 'Criada'}] Nº: ${num} | Obra: ${data.obrNom} | Descrição: ${descricao}`
+    );
+
+    alert(
+        isDraft
+        ? "Consulta guardada como Rascunho!"
+        : "Consulta criada com sucesso!"
+    );
+
+    cancelarEdit('consultas');
+    renderConsultas();
+}
     const id = editingId || `NE_${Date.now()}`;
     let num = document.getElementById('ne-num').value;
     const obrSel = document.getElementById('ne-obr');
@@ -1310,6 +1825,7 @@ function renderAll() {
     populateObraFilter('filt-r-obr', DB.rend);
     populateObraFilter('filt-obs-obr', DB.obs);
     populateObraFilter('filt-ne-obr', DB.ne);
+    populateObraFilter('filt-consulta-obr', DB.consultas);
     populateObraFilter('filt-ped-obr', DB.ped);
     populateObraFilter('filt-tar-obr', DB.tar);
     try { renderObras(); } catch(e) { console.error("Erro Obras:", e); }
@@ -1317,6 +1833,7 @@ function renderAll() {
     try { renderHoras(); } catch(e) { console.error("Erro Horas:", e); }
     try { renderObs(); } catch(e) { console.error("Erro Obs:", e); }
     try { renderNE(); } catch(e) { console.error("Erro NE:", e); }
+    try { renderConsultas(); } catch(e) { console.error("Erro Consultas:", e); }
     try { renderPed(); } catch(e) { console.error("Erro Ped:", e); }
     try { renderTar(); } catch(e) { console.error("Erro Tasks:", e); }
     try { renderNotif(); } catch(e) { console.error("Erro Notif:", e); }
@@ -1468,6 +1985,46 @@ function renderRend() {
         });
     });
 }
+function getConsultaStatusClass(status) {
+    if(status === 'Pendente de solicitar ao fornecedor') return 'consulta-status-pendente';
+    if(status === 'Enviada ao fornecedor') return 'consulta-status-enviada';
+    if(status === 'Entregue pelo fornecedor') return 'consulta-status-entregue';
+    if(status === 'Sem Efeito') return 'consulta-status-sem-efeito';
+    if(status === 'Rascunho') return 'consulta-status-rascunho';
+    return '';
+}
+
+function getConsultaBorderColor(status) {
+    if(status === 'Pendente de solicitar ao fornecedor') return '#e8cf91';
+    if(status === 'Enviada ao fornecedor') return '#f3c28e';
+    if(status === 'Entregue pelo fornecedor') return '#abd7ab';
+    if(status === 'Sem Efeito') return '#c7cbd1';
+    if(status === 'Rascunho') return '#cbc0e6';
+    return '#94a3b8';
+}
+
+function consultaEstadoFornecedorAlterado(selectEl) {
+    if(!selectEl) return;
+
+    const row = selectEl.closest('tr');
+    if(!row) return;
+
+    const envio = row.querySelector('.consulta-d-envio');
+    const resposta = row.querySelector('.consulta-d-resposta');
+
+    const now = new Date().toLocaleString();
+
+    if(selectEl.value === 'Enviada ao fornecedor' && envio && !envio.value) {
+        envio.value = now;
+    }
+
+    if(selectEl.value === 'Entregue pelo fornecedor' && resposta && !resposta.value) {
+        resposta.value = now;
+    }
+
+    selectEl.className = `consulta-status-select ${getConsultaStatusClass(selectEl.value)}`;
+}
+
 function getPedStatusClass(status) {
     if(status === 'Por Solicitar') return 'ped-status-por-solicitar';
     if(status === 'Enviado ao Fornecedor') return 'ped-status-enviado';
@@ -1917,6 +2474,121 @@ function renderNE() {
     });
 }
 
+function renderConsultas() {
+    const list = document.getElementById('list-consultas');
+
+    if(!list) return;
+
+    list.innerHTML = '';
+
+    const fNum = document.getElementById('filt-consulta-num')?.value.trim().toLowerCase() || '';
+    const fObr = document.getElementById('filt-consulta-obr')?.value || '';
+    const fProv = document.getElementById('filt-consulta-prov')?.value.trim().toLowerCase() || '';
+    const fMat = document.getElementById('filt-consulta-mat')?.value.trim().toLowerCase() || '';
+    const fDesc = document.getElementById('filt-consulta-desc')?.value.trim().toLowerCase() || '';
+    const fEst = document.getElementById('filt-consulta-est')?.value || '';
+
+    let data = DB.consultas.filter(c => {
+        const matchNum =
+            !fNum ||
+            (c.num || '').toLowerCase().includes(fNum);
+
+        const matchObr =
+            !fObr ||
+            (c.obrNom || '').trim() === fObr.trim();
+
+        const matchProv =
+            !fProv ||
+            (c.fornecedores || []).some(f =>
+                (f.nome || '').toLowerCase().includes(fProv)
+            );
+
+        const matchMat =
+            !fMat ||
+            (c.items || []).some(i =>
+                (i.p || '').toLowerCase().includes(fMat)
+            );
+
+        const matchDesc =
+            !fDesc ||
+            (c.descricao || '').toLowerCase().includes(fDesc);
+
+        const matchEst =
+            !fEst ||
+            (fEst === 'Rascunho' && c.est === 'Rascunho') ||
+            (c.fornecedores || []).some(f => f.est === fEst);
+
+        return matchNum && matchObr && matchProv && matchMat && matchDesc && matchEst;
+    });
+
+    data.reverse().forEach(c => {
+
+        const fornecedoresResumo = (c.fornecedores || []).map((f, idx) => `
+            <span style="display:inline-block; margin:2px 4px 2px 0; padding:3px 6px; border-radius:4px; font-size:9px; font-weight:bold; background:#f1f5f9;">
+                ${f.nome} — ${f.est}
+            </span>
+        `).join('');
+
+        list.innerHTML += `
+            <div class="card" style="border-left-color:#94a3b8;">
+                <input type="checkbox" class="chk-mass" value="${c.id}">
+
+                <div class="card-grid" style="align-items:center;">
+                    <div><b>Nº Consulta:</b> ${c.num}</div>
+                    <div><b>Obra:</b> ${c.obrNom}</div>
+                    <div><b>Descrição:</b> ${c.descricao}</div>
+                    <div><b>Materiais:</b> ${c.items ? c.items.length : 0}</div>
+                    <div><b>Fornecedores:</b> ${(c.fornecedores || []).length}</div>
+                </div>
+
+                <div style="margin-top:8px;">
+                    ${fornecedoresResumo}
+                </div>
+
+                <div class="actions">
+                    <button class="b-edit"
+                            onclick="toggleConsultaGestao('${c.id}')">
+                        📊 Gerir / Comparar
+                    </button>
+
+                    <button class="b-hist"
+                            onclick="openHist('${c.id}')">
+                        📜 Historial
+                    </button>
+
+                    <button class="b-file"
+                            onclick="openFiles('consultas','${c.id}')">
+                        📁 Anexos (${c.files ? c.files.length : 0})
+                    </button>
+
+                    ${user.role === 'Administrador'
+                        ? `<button class="b-del" onclick="deleteRecord('consultas','${c.id}')">🗑️ Eliminar</button>`
+                        : ''
+                    }
+                </div>
+
+                <div id="consulta-gestao-${c.id}"></div>
+            </div>
+        `;
+    });
+}
+
+function clearConsultaFilters() {
+    [
+        'filt-consulta-num',
+        'filt-consulta-obr',
+        'filt-consulta-prov',
+        'filt-consulta-mat',
+        'filt-consulta-desc',
+        'filt-consulta-est'
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.value = '';
+    });
+
+    renderConsultas();
+}
+
 function renderTar() {
     const list = document.getElementById('list-tar'); if(!list) return;
     list.innerHTML = '';
@@ -2132,13 +2804,29 @@ function cancelarEdit(mod) {
         form.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
     }
     if(document.getElementById(`${pre}-cancel`)) document.getElementById(`${pre}-cancel`).style.display = 'none';
-    if(mod === 'ne') { document.getElementById('ne-body').innerHTML = ''; autoNumNE(); addNERow(); }
-    if(mod === 'rend') { document.getElementById('rend-body').innerHTML = ''; addRendRow(); }
+        if(mod === 'ne') {
+        document.getElementById('ne-body').innerHTML = '';
+        autoNumNE();
+        addNERow();
+    }
+
+    if(mod === 'consultas') {
+        document.getElementById('consulta-forn-body').innerHTML = '';
+        document.getElementById('consulta-body').innerHTML = '';
+        autoNumConsulta();
+        addConsultaFornecedorRow();
+        addConsultaMaterialRow();
+    }
+
+    if(mod === 'rend') {
+        document.getElementById('rend-body').innerHTML = '';
+        addRendRow();
+    }
     if(mod === 'horas' && document.getElementById('h-est')) document.getElementById('h-est').disabled = true;
 }
 
 function getPrefix(mod) {
-    const map = { obras:'o', rend:'r', horas:'h', obs:'obs', ne:'ne', ped:'ped', tar:'tar', users:'u', forn:'forn' };
+    const map = { obras:'o', rend:'r', horas:'h', obs:'obs', ne:'ne', consultas:'consulta', ped:'ped', tar:'tar', users:'u', forn:'forn' };
     return map[mod] || '';
 }
 
@@ -2451,6 +3139,29 @@ function autoNumNE() {
     }
 }
 
+function autoNumConsulta() {
+    if(!editingId) {
+        const currentYear = new Date().getFullYear().toString();
+        const consultasThisYear = DB.consultas.filter(c => c.num && c.num.includes('.' + currentYear));
+        let maxNum = 0;
+
+        consultasThisYear.forEach(c => {
+            const parts = c.num.split('.');
+
+            if(parts.length > 0) {
+                const numPart = parseInt(parts[0].replace('CONS', ''), 10);
+
+                if(!isNaN(numPart) && numPart > maxNum) {
+                    maxNum = numPart;
+                }
+            }
+        });
+
+        document.getElementById('consulta-num').value =
+            `CONS${String(maxNum + 1).padStart(3, '0')}.${currentYear}`;
+    }
+}
+
 function toggleMass(mod) {
     massMode = !massMode;
     document.getElementById(`mod-${mod}`).classList.toggle('mass-mode');
@@ -2738,6 +3449,542 @@ async function compressImage(file) {
         worker.postMessage(file);
     });
 }
+function toggleConsultaGestao(id) {
+    const container = document.getElementById(`consulta-gestao-${id}`);
+
+    if(!container) return;
+
+    if(container.innerHTML.trim()) {
+        container.innerHTML = '';
+        return;
+    }
+
+    renderConsultaGestao(id);
+}
+
+function renderConsultaGestao(id) {
+    const container = document.getElementById(`consulta-gestao-${id}`);
+    const consulta = DB.consultas.find(c => c.id === id);
+
+    if(!container || !consulta) return;
+
+    const obraOptions = DB.obras
+        .filter(o => o.est === 'Em Execução')
+        .map(o => {
+            const val = `${o.num} - ${o.nom}`;
+
+            return `
+                <option value="${o.id}" ${consulta.obrId === o.id ? 'selected' : ''}>
+                    ${val}
+                </option>
+            `;
+        }).join('');
+
+    const fornecedoresHtml = (consulta.fornecedores || []).map((f, idx) => `
+        <tr>
+            <td>
+                <input type="text"
+                       class="consulta-g-forn"
+                       list="lista-forn-sug"
+                       value="${f.nome || ''}"
+                       style="width:100%;">
+            </td>
+
+            <td>
+                <input type="text"
+                       class="consulta-g-envio"
+                       value="${f.d_envio || ''}"
+                       readonly
+                       style="width:100%; background:#f1f5f9;">
+            </td>
+
+            <td>
+                <input type="text"
+                       class="consulta-g-resposta"
+                       value="${f.d_resposta || ''}"
+                       readonly
+                       style="width:100%; background:#f1f5f9;">
+            </td>
+
+            <td>
+                <textarea class="consulta-g-obs"
+                          rows="2"
+                          style="width:100%;">${f.obs || ''}</textarea>
+            </td>
+
+            <td style="text-align:center;">
+                <button onclick="gerarPDFConsulta('${id}', ${idx})"
+                        style="border:none; background:none; cursor:pointer; font-size:18px;">
+                    📄
+                </button>
+            </td>
+
+            <td>
+                <select class="consulta-g-est ${getConsultaStatusClass(f.est)}"
+                        onchange="consultaEstadoFornecedorAlterado(this)"
+                        style="width:100%; min-width:190px;">
+                    <option ${f.est === 'Pendente de solicitar ao fornecedor' ? 'selected' : ''}>
+                        Pendente de solicitar ao fornecedor
+                    </option>
+                    <option ${f.est === 'Enviada ao fornecedor' ? 'selected' : ''}>
+                        Enviada ao fornecedor
+                    </option>
+                    <option ${f.est === 'Entregue pelo fornecedor' ? 'selected' : ''}>
+                        Entregue pelo fornecedor
+                    </option>
+                    <option ${f.est === 'Sem Efeito' ? 'selected' : ''}>
+                        Sem Efeito
+                    </option>
+                    <option ${f.est === 'Rascunho' ? 'selected' : ''}>
+                        Rascunho
+                    </option>
+                </select>
+            </td>
+        </tr>
+    `).join('');
+
+    const comparativoHead = (consulta.fornecedores || []).map(f =>
+        `<th>${f.nome || 'Fornecedor'}</th>`
+    ).join('');
+
+    const comparativoBody = (consulta.items || []).map((item, itemIdx) => {
+
+        const preços = (consulta.fornecedores || []).map((f, fIdx) => `
+            <td>
+                <input
+                    type="number"
+                    step="0.01"
+                    class="consulta-preco"
+                    data-fidx="${fIdx}"
+                    data-iidx="${itemIdx}"
+                    value="${f.precos && f.precos[itemIdx] !== undefined ? f.precos[itemIdx] : ''}"
+                    placeholder="€"
+                    oninput="atualizarTotalComparativo(this)"
+                >
+                <div style="font-size:9px; color:#64748b; margin-top:2px;">
+                    Total:
+                    <span class="consulta-total-preco"
+                          data-fidx="${fIdx}"
+                          data-iidx="${itemIdx}">
+                        ${((Number(item.q) || 0) * (Number(f.precos?.[itemIdx]) || 0)).toFixed(2)}
+                    </span> €
+                </div>
+            </td>
+        `).join('');
+
+        const adjudicado = consulta.adjudicacoes?.[itemIdx] ?? '';
+
+        const adjudicacaoOptions = (consulta.fornecedores || []).map((f, fIdx) => `
+            <option value="${fIdx}" ${String(adjudicado) === String(fIdx) ? 'selected' : ''}>
+                ${f.nome}
+            </option>
+        `).join('');
+
+        return `
+            <tr>
+                <td>${item.q || ''}</td>
+                <td>${item.u || ''}</td>
+                <td>${item.p || ''}</td>
+                ${preços}
+                <td>
+                    <select class="consulta-adjudicado"
+                            data-iidx="${itemIdx}">
+                        <option value="">-- Selecionar --</option>
+                        ${adjudicacaoOptions}
+                    </select>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="consulta-gestao">
+
+            <h4 style="margin-top:0;">📋 Gestão da Consulta ${consulta.num}</h4>
+
+            <div class="grid">
+                <div>
+                    <label>Nº Consulta</label>
+                    <input type="text" value="${consulta.num}" readonly style="background:#f1f5f9;">
+                </div>
+
+                <div>
+                    <label>Obra</label>
+                    <select class="consulta-g-obr">
+                        ${obraOptions}
+                    </select>
+                </div>
+
+                <div class="full-w">
+                    <label>Descrição</label>
+                    <input type="text"
+                           class="consulta-g-desc"
+                           value="${consulta.descricao || ''}">
+                </div>
+            </div>
+
+            <h4>🏢 Controlo da gestão das consultas</h4>
+
+            <table class="ne-table">
+                <thead>
+                    <tr>
+                        <th>Fornecedor</th>
+                        <th>Data de Envio</th>
+                        <th>Data de Receção</th>
+                        <th>Observações</th>
+                        <th>PDF</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${fornecedoresHtml}
+                </tbody>
+            </table>
+
+            <h4 style="margin-top:15px;">📊 Mapa Comparativo</h4>
+
+            <div class="consulta-comparativo">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Qtd</th>
+                            <th>Unid</th>
+                            <th>Produto / Material</th>
+                            ${comparativoHead}
+                            <th>Fornecedor Adjudicado</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        ${comparativoBody}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="actions" style="margin-top:15px;">
+                <button class="b-file"
+                        onclick="saveConsultaGestao('${id}')">
+                    💾 Gravar Alterações
+                </button>
+
+                <button class="b-hist"
+                        onclick="document.getElementById('consulta-gestao-${id}').innerHTML=''">
+                    ✖ Fechar Gestão
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function atualizarTotalComparativo(input) {
+    const fIdx = input.dataset.fidx;
+    const iIdx = input.dataset.iidx;
+    const consulta = DB.consultas.find(c =>
+        document.getElementById(`consulta-gestao-${c.id}`)?.contains(input)
+    );
+
+    if(!consulta) return;
+
+    const item = consulta.items[iIdx];
+    const totalEl = document.querySelector(
+        `.consulta-total-preco[data-fidx="${fIdx}"][data-iidx="${iIdx}"]`
+    );
+
+    if(totalEl) {
+        totalEl.innerText =
+            ((Number(item.q) || 0) * (Number(input.value) || 0)).toFixed(2);
+    }
+}
+
+async function saveConsultaGestao(id) {
+    const consulta = DB.consultas.find(c => c.id === id);
+
+    if(!consulta) return;
+
+    const container = document.getElementById(`consulta-gestao-${id}`);
+
+    if(!container) return;
+
+    const now = new Date().toLocaleString();
+
+    const old = JSON.parse(JSON.stringify(consulta));
+
+    const obrEl = container.querySelector('.consulta-g-obr');
+    const descEl = container.querySelector('.consulta-g-desc');
+
+    const fornecedores = [];
+
+    container.querySelectorAll('tbody tr').forEach(tr => {
+        const nomeEl = tr.querySelector('.consulta-g-forn');
+
+        if(!nomeEl) return;
+
+        const nome = nomeEl.value.trim();
+
+        if(!nome) return;
+
+        const fornecedor = DB.forn.find(f =>
+            (f.nome || '').toLowerCase() === nome.toLowerCase()
+        );
+
+        const estadoEl = tr.querySelector('.consulta-g-est');
+        const envioEl = tr.querySelector('.consulta-g-envio');
+        const respostaEl = tr.querySelector('.consulta-g-resposta');
+        const obsEl = tr.querySelector('.consulta-g-obs');
+
+        fornecedores.push({
+            nome,
+            fornecedorId: fornecedor ? fornecedor.id : null,
+            d_envio: envioEl?.value || '',
+            d_resposta: respostaEl?.value || '',
+            obs: obsEl?.value || '',
+            est: estadoEl?.value || 'Pendente de solicitar ao fornecedor',
+            precos: {}
+        });
+    });
+
+    fornecedores.forEach(f => {
+        if(f.est === 'Enviada ao fornecedor' && !f.d_envio) {
+            f.d_envio = now;
+        }
+
+        if(f.est === 'Entregue pelo fornecedor' && !f.d_resposta) {
+            f.d_resposta = now;
+        }
+    });
+
+    const items = [];
+
+    container.querySelectorAll('.consulta-comparativo tbody tr').forEach((tr, itemIdx) => {
+
+        const baseItem = consulta.items[itemIdx];
+
+        if(!baseItem) return;
+
+        const precos = {};
+
+        tr.querySelectorAll('.consulta-preco').forEach(input => {
+            const fIdx = input.dataset.fidx;
+            const valor = input.value;
+
+            if(valor !== '') {
+                precos[fIdx] = valor;
+            }
+        });
+
+        items.push({
+            ...baseItem,
+            precos
+        });
+    });
+
+    const adjudicacoes = {};
+
+    container.querySelectorAll('.consulta-adjudicado').forEach(select => {
+        if(select.value !== '') {
+            adjudicacoes[select.dataset.iidx] = Number(select.value);
+        }
+    });
+
+    const data = {
+        ...consulta,
+        obrId: obrEl ? obrEl.value : consulta.obrId,
+        obrNom: obrEl
+            ? obrEl.options[obrEl.selectedIndex].text
+            : consulta.obrNom,
+        descricao: descEl ? descEl.value.trim() : consulta.descricao,
+        fornecedores,
+        items,
+        adjudicacoes,
+        u_edit: user.u || user.n,
+        d_edit: now
+    };
+
+    await db.ref(`consultas/${id}`).set(data);
+
+    const log = generateDiff(old, data);
+
+    if(log) {
+        await db.ref(`hist/${id}`).push({
+            u: user.u || user.n,
+            ts: now,
+            log,
+            d_crea: data.d_crea
+        });
+    }
+
+    createNotif(
+        'consultas',
+        `[CONSULTA - Alterada] Nº: ${data.num} | Obra: ${data.obrNom}`
+    );
+
+    alert("Consulta atualizada com sucesso!");
+
+    renderConsultas();
+    renderConsultaGestao(id);
+}
+
+function gerarPDFConsulta(id, fornecedorIdx) {
+    const consulta = DB.consultas.find(c => c.id === id);
+
+    if(!consulta) return;
+
+    const fornecedor = consulta.fornecedores?.[fornecedorIdx];
+
+    if(!fornecedor) {
+        return alert("Fornecedor não encontrado.");
+    }
+
+    const fData = DB.forn.find(f =>
+        f.id === fornecedor.fornecedorId ||
+        (f.nome || '').toLowerCase() === (fornecedor.nome || '').toLowerCase()
+    ) || {};
+
+    const { jsPDF } = window.jspdf;
+
+    const doc = new jsPDF();
+
+    const emp = DB.empresa || {};
+
+    if(emp.logo) {
+        try {
+            const props = doc.getImageProperties(emp.logo);
+            const ratio = props.width / props.height;
+
+            let w = 80;
+            let h = w / ratio;
+
+            if(h > 40) {
+                h = 40;
+                w = h * ratio;
+            }
+
+            doc.addImage(emp.logo, 'PNG', 10, 10, w, h);
+        } catch(e) {}
+    }
+
+    doc.setFontSize(14)
+       .setFont(undefined, 'bold')
+       .text("CONSULTA AO FORNECEDOR", 200, 15, {align:"right"});
+
+    doc.setFontSize(10)
+       .setFont(undefined, 'normal')
+       .text(`Nº: ${consulta.num}`, 200, 20, {align:"right"});
+
+    doc.setFontSize(8);
+
+    doc.setFont(undefined, 'bold')
+       .text("FORNECEDOR:", 10, 48);
+
+    doc.setFont(undefined, 'normal');
+
+    doc.text(`Nome: ${fornecedor.nome || '---'}`, 10, 53);
+    doc.text(`NIF: ${fData.nif || '---'}`, 10, 58);
+
+    const splitMorada = doc.splitTextToSize(
+        `Morada: ${fData.morada || '---'}`,
+        85
+    );
+
+    doc.text(splitMorada, 10, 63);
+
+    doc.text(`Tel: ${fData.tel || '---'} / Telm: ${fData.telm || '---'}`, 100, 58);
+    doc.text(`E-mail: ${fData.email || '---'}`, 100, 63);
+
+    doc.setFontSize(10)
+       .setFont(undefined, 'bold')
+       .text(`OBRA: ${consulta.obrNom}`, 10, 38);
+
+    doc.setDrawColor(200)
+       .setLineWidth(0.1)
+       .line(10, 43, 200, 43);
+
+    doc.setFontSize(10)
+       .setFont(undefined, 'bold');
+
+    doc.text(
+        `CONSULTA: ${consulta.descricao || '---'}`,
+        10,
+        68
+    );
+
+    const tableData = (consulta.items || []).map(i => [
+        Number(i.q || 0).toFixed(2).replace('.', ','),
+        i.u || '',
+        i.p || '',
+        '',
+        ''
+    ]);
+
+    doc.autoTable({
+        head: [['Qtd','Un','Produto / Material','Preço Un.','Total']],
+        body: tableData,
+        startY: 78,
+        theme: 'striped',
+        headStyles: { fillGray: [15, 23, 42] },
+        columnStyles: { 4: { halign: 'right' } }
+    });
+
+    const finalY = doc.lastAutoTable.finalY;
+
+    doc.setDrawColor(200)
+       .setLineWidth(0.1)
+       .line(10, finalY + 10, 200, finalY + 10);
+
+    let condY = finalY + 17;
+
+    doc.setFontSize(10)
+       .setFont(undefined, 'bold');
+
+    doc.text(
+        "OBSERVAÇÕES DA CONSULTA:",
+        10,
+        condY
+    );
+
+    doc.setFontSize(9)
+       .setFont(undefined, 'normal');
+
+    const obs = fornecedor.obs || 'N/A';
+    const splitObs = doc.splitTextToSize(obs, 180);
+
+    doc.text(splitObs, 10, condY + 6);
+
+    const pageCount = doc.internal.getNumberOfPages();
+
+    for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+
+        const footerY = 285;
+
+        doc.setFontSize(9)
+           .setFont(undefined, 'bold')
+           .setTextColor(37, 99, 235);
+
+        doc.text(
+            `Documento gerado por: ${consulta.u_crea} em ${consulta.d_crea}`,
+            105,
+            footerY - 5,
+            {align:"center"}
+        );
+
+        doc.setFontSize(8)
+           .setFont(undefined, 'normal')
+           .setTextColor(100);
+
+        doc.text(
+            emp.web || '',
+            105,
+            footerY,
+            {align:"center"}
+        );
+    }
+
+    doc.save(
+        `${consulta.num}.${fornecedor.nome}.pdf`
+    );
+}
+
 	
 function logout() {
     if(confirm("Deseja realmente sair do sistema?")) {
