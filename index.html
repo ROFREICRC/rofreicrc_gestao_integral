@@ -1472,6 +1472,8 @@ async function saveConsulta(isDraft = false) {
     cancelarEdit('consultas');
     renderConsultas();
 }
+
+async function saveNE(isDraft = false) {
     const id = editingId || `NE_${Date.now()}`;
     let num = document.getElementById('ne-num').value;
     const obrSel = document.getElementById('ne-obr');
