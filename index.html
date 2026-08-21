@@ -439,6 +439,7 @@
                                 <th>Observações</th>
                                 <th>PDF</th>
                                 <th>Estado</th>
+                                <th>Ação</th>
                             </tr>
                         </thead>
                         <tbody id="consulta-forn-body"></tbody>
@@ -1205,8 +1206,10 @@ function addConsultaFornecedorRow(val = {
         </td>
 
         <td>
-            <select class="consulta-forn-est ${statusClass}"
+                <select class="consulta-forn-est ${statusClass}"
                     onchange="consultaEstadoFornecedorAlterado(this)"
+                    ${!editingId ? 'disabled' : ''}
+                    data-estado-original="${val.est || 'Pendente de solicitar ao fornecedor'}"
                     style="width:100%; min-width:190px;">
                 <option ${val.est === 'Pendente de solicitar ao fornecedor' ? 'selected' : ''}>
                     Pendente de solicitar ao fornecedor
@@ -1224,6 +1227,14 @@ function addConsultaFornecedorRow(val = {
                     Rascunho
                 </option>
             </select>
+        </td>
+
+        <td style="text-align:center;">
+            <button type="button"
+                    onclick="this.closest('tr').remove()"
+                    style="color:#dc2626; border:none; background:#fef2f2; cursor:pointer; padding:5px 8px; border-radius:4px; font-weight:bold;">
+                🗑️
+            </button>
         </td>
     `;
 
@@ -1783,6 +1794,31 @@ async function saveNE(isDraft = false) {
     renderNE();
 }
 
+function populateObrasConsulta() {
+    const sel = document.getElementById('consulta-obr');
+    if(!sel) return;
+
+    const currentVal = sel.value;
+
+    sel.innerHTML = '<option value="">Selecione uma Obra...</option>';
+
+    const obrasValidas = [...DB.obras]
+        .filter(o => o.est === 'Em Execução')
+        .sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+
+    obrasValidas.forEach(o => {
+        const textoCompleto = `${o.num} - ${o.nom}`;
+
+        sel.innerHTML += `
+            <option value="${o.id}">
+                ${textoCompleto}
+            </option>
+        `;
+    });
+
+    sel.value = currentVal;
+}
+
 function populateObraFilter(selectId, modData) {
     const sel = document.getElementById(selectId);
     if (!sel) return;
@@ -1827,7 +1863,7 @@ function renderAll() {
     populateObraFilter('filt-r-obr', DB.rend);
     populateObraFilter('filt-obs-obr', DB.obs);
     populateObraFilter('filt-ne-obr', DB.ne);
-    populateObraFilter('filt-consulta-obr', DB.consultas);
+    populateObrasConsulta();
     populateObraFilter('filt-ped-obr', DB.ped);
     populateObraFilter('filt-tar-obr', DB.tar);
     try { renderObras(); } catch(e) { console.error("Erro Obras:", e); }
@@ -2014,17 +2050,36 @@ function consultaEstadoFornecedorAlterado(selectEl) {
     const envio = row.querySelector('.consulta-d-envio');
     const resposta = row.querySelector('.consulta-d-resposta');
 
+    const estadoAnterior = selectEl.dataset.estadoOriginal || 'Pendente de solicitar ao fornecedor';
+    const novoEstado = selectEl.value;
+
+    if(novoEstado === estadoAnterior) {
+        selectEl.className = `consulta-status-select ${getConsultaStatusClass(novoEstado)}`;
+        return;
+    }
+
+    const confirmar = confirm(
+        `Deseja gravar a alteração do estado para:\n\n"${novoEstado}"?`
+    );
+
+    if(!confirmar) {
+        selectEl.value = estadoAnterior;
+        selectEl.className = `consulta-status-select ${getConsultaStatusClass(estadoAnterior)}`;
+        return;
+    }
+
     const now = new Date().toLocaleString();
 
-    if(selectEl.value === 'Enviada ao fornecedor' && envio && !envio.value) {
+    if(novoEstado === 'Enviada ao fornecedor' && envio && !envio.value) {
         envio.value = now;
     }
 
-    if(selectEl.value === 'Entregue pelo fornecedor' && resposta && !resposta.value) {
+    if(novoEstado === 'Entregue pelo fornecedor' && resposta && !resposta.value) {
         resposta.value = now;
     }
 
-    selectEl.className = `consulta-status-select ${getConsultaStatusClass(selectEl.value)}`;
+    selectEl.dataset.estadoOriginal = novoEstado;
+    selectEl.className = `consulta-status-select ${getConsultaStatusClass(novoEstado)}`;
 }
 
 function getPedStatusClass(status) {
@@ -3522,8 +3577,9 @@ function renderConsultaGestao(id) {
             </td>
 
             <td>
-                <select class="consulta-g-est ${getConsultaStatusClass(f.est)}"
+                    <select class="consulta-g-est ${getConsultaStatusClass(f.est)}"
                         onchange="consultaEstadoFornecedorAlterado(this)"
+                        data-estado-original="${f.est || 'Pendente de solicitar ao fornecedor'}"
                         style="width:100%; min-width:190px;">
                     <option ${f.est === 'Pendente de solicitar ao fornecedor' ? 'selected' : ''}>
                         Pendente de solicitar ao fornecedor
@@ -3629,14 +3685,15 @@ function renderConsultaGestao(id) {
 
             <table class="ne-table">
                 <thead>
-                    <tr>
-                        <th>Fornecedor</th>
-                        <th>Data de Envio</th>
-                        <th>Data de Receção</th>
-                        <th>Observações</th>
-                        <th>PDF</th>
-                        <th>Estado</th>
-                    </tr>
+                            <tr>
+                                <th>Fornecedor</th>
+                                <th>Data de Envio</th>
+                                <th>Data de Receção</th>
+                                <th>Observações</th>
+                                <th>PDF</th>
+                                <th>Estado</th>
+                                <th>Ação</th>
+                            </tr>
                 </thead>
                 <tbody>
                     ${fornecedoresHtml}
