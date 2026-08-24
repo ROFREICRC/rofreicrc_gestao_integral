@@ -56,6 +56,10 @@
         .mass-mode .card { margin-left: 35px; border-left-color: var(--warn); }
         .mass-panel { display: none; background: #fff7ed; padding: 10px; border-radius: 4px; margin-bottom: 10px; border: 1px solid #fdba74; }
 		.ped-status-select { font-weight: bold; border-width: 1px; cursor: pointer; }
+        .tar-status-select { font-weight: bold; border-width: 1px; cursor: pointer; }
+        .tar-status-por-realizar { background: #f9d6d5 !important; color: #7f1d1d; border-color: #efb1af !important; }
+        .tar-status-realizada { background: #d9efd9 !important; color: #166534; border-color: #abd7ab !important; }
+        .tar-status-sem-efeito { background: #e5e7eb !important; color: #374151; border-color: #c7cbd1 !important; }
 		.ped-status-por-solicitar { background: #f9d6d5 !important; color: #7f1d1d; border-color: #efb1af !important; }
 		.ped-status-enviado { background: #fce3c7 !important; color: #7c2d12; border-color: #f3c28e !important; }
 		.ped-status-entregue { background: #d9efd9 !important; color: #166534; border-color: #abd7ab !important; }
@@ -619,24 +623,68 @@
                     <div><label>Obra (Apenas Em Execução)</label><select id="tar-obr"></select></div>
                     <div class="full-w"><label>Tarefa a Realizar</label><textarea id="tar-txt" rows="2"></textarea></div>
                     <div class="full-w"><label>Atribuir a (Selecione vários com Ctrl/Cmd)</label><select id="tar-users" multiple style="height:80px;"></select></div>
-                    <div><label>Estado</label><select id="tar-est"><option>Por Realizar</option><option>Realizada</option><option>Sem Efeito</option></select></div>
+                            <section id="mod-tar" class="mod-sec">
+            <div class="form-box">
+                <h3>✅ Tarefas</h3>
+
+                <div class="grid">
+                    <div>
+                        <label>Obra (Apenas Em Execução)</label>
+                        <select id="tar-obr"></select>
+                    </div>
                 </div>
+
+                <table class="ne-table" style="margin-bottom:10px;">
+                    <thead>
+                        <tr>
+                            <th>Tarefa a Realizar</th>
+                            <th>Atribuído a</th>
+                            <th>Estado</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tar-body"></tbody>
+                </table>
+
+                <button type="button"
+                        onclick="addTarRow()"
+                        style="margin-top:5px; padding:6px 10px; cursor:pointer; background:var(--s); color:white; border:none; border-radius:3px">
+                    + Adicionar Tarefa
+                </button>
+
                 <div class="btn-row-form">
                     <button class="btn-main" onclick="saveRecord('tar')">Gravar Tarefa</button>
                     <button id="tar-cancel" class="btn-cancel" onclick="cancelarEdit('tar')">Cancelar Edição</button>
                 </div>
             </div>
+
             <div class="filter-bar">
-                <button onclick="toggleMass('tar')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">☑️ Seleção Check-list</button>
-                <button onclick="exportarExcel('tar')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">📊 Excel</button>
-                <select id="filt-tar-obr" onchange="renderTar()"><option value="">Todas as Obras</option></select>
-				<select id="filt-tar-est" onchange="renderTar()"><option value="">Todos os Estados</option><option>Por Realizar</option><option>Realizada</option></select>
+                <button onclick="toggleMass('tar')" style="background:var(--warn); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">
+                    ☑️ Seleção Check-list
+                </button>
+
+                <button onclick="exportarExcel('tar')" style="background:var(--ok); color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer">
+                    📊 Excel
+                </button>
+
+                <select id="filt-tar-obr" onchange="renderTar()">
+                    <option value="">Todas as Obras</option>
+                </select>
+
+                <select id="filt-tar-est" onchange="renderTar()">
+                    <option value="">Todos os Estados</option>
+                    <option>Por Realizar</option>
+                    <option>Realizada</option>
+                    <option>Sem Efeito</option>
+                </select>
             </div>
+
             <div id="mass-tar" class="mass-panel">
                 <button onclick="openMassUpload('tar')" class="actions b-file">📁 Anexar aos Selecionados</button>
                 <button onclick="downloadMassFiles('tar')" class="actions b-hist">⬇️ Descarregar Documentação Simultânea</button>
                 <button onclick="deleteMassRecords('tar')" class="actions b-del">🗑️ Eliminar Selecionados</button>
             </div>
+
             <div id="list-tar"></div>
         </section>
 
@@ -1082,12 +1130,43 @@ async function saveRecord(mod) {
         }
     } else if(mod === 'tar') {
         const selO = document.getElementById('tar-obr');
-        const selU = document.getElementById('tar-users');
+
         data.obrId = selO.value;
         data.obrNom = selO.options[selO.selectedIndex].text;
-        data.txt = document.getElementById('tar-txt').value;
-        data.assigned = Array.from(selU.selectedOptions).map(o => o.value);
-        data.est = document.getElementById('tar-est').value;
+
+        const tarefas = [];
+
+        document.querySelectorAll('#tar-body tr').forEach(tr => {
+            const txt = tr.querySelector('.tar-row-txt')?.value.trim() || '';
+
+            const assigned = Array.from(
+                tr.querySelector('.tar-row-users')?.selectedOptions || []
+            )
+            .map(o => o.value)
+            .filter(v => v !== '');
+
+            const est = tr.querySelector('.tar-row-est')?.value || 'Por Realizar';
+
+            if(txt) {
+                tarefas.push({
+                    txt,
+                    assigned,
+                    est
+                });
+            }
+        });
+
+        if(tarefas.length === 0) {
+            return alert("Adicione pelo menos uma tarefa.");
+        }
+
+        data.tarefas = tarefas;
+
+        // Compatibilidade com registros antigos
+        data.txt = tarefas[0].txt;
+        data.assigned = tarefas[0].assigned;
+        data.est = tarefas[0].est;
+
     } else if(mod === 'users') {
         data.u = document.getElementById('u-nom').value;
         data.p = document.getElementById('u-pwd').value;
@@ -1114,7 +1193,7 @@ async function saveRecord(mod) {
 	else if(mod === 'horas') detalhesNotif = `Obra: ${data.obrNom} | Data: ${data.dat} | Tarefa: ${data.task} | Horário: ${data.ini} - ${data.fim}`;
     else if(mod === 'obs') detalhesNotif = `Obra: ${data.obrNom} | Obs: ${data.txt} | Estado: ${data.est}`;
     else if(mod === 'ped') detalhesNotif = `Obra: ${data.obrNom} | Mat: ${data.mat} | Qtd: ${data.qtd} | Fornecedor: ${data.prov || 'N/A'}`;
-    else if(mod === 'tar') detalhesNotif = `Obra: ${data.obrNom} | Tarefa: ${data.txt} | Atribuído a: ${(data.assigned || []).join(', ')} | Estado: ${data.est}`;
+    else if(mod === 'tar') detalhesNotif = `Obra: ${data.obrNom} | Tarefas: ${(data.tarefas || []).map(t => `${t.txt} | Atribuído a: ${(t.assigned || []).join(', ')} | Estado: ${t.est}`).join(' || ')}`;
     else if(mod === 'users') detalhesNotif = `Utilizador: ${data.u} | Perfil: ${data.role} | Estado: ${data.st}`;
     else detalhesNotif = data.num || data.obrNom || data.mat || data.id;
 
@@ -1193,6 +1272,229 @@ function generateDiff(oldData, newData) {
 }
 
 // --- LÓGICA ESPECÍFICA N.E. ---
+let tarRowIdx = 0;
+
+function getTarStatusClass(status) {
+    if(status === 'Por Realizar') return 'tar-status-por-realizar';
+    if(status === 'Realizada') return 'tar-status-realizada';
+    if(status === 'Sem Efeito') return 'tar-status-sem-efeito';
+    return '';
+}
+
+function getTarBorderColor(tarefas) {
+    const estados = (tarefas || []).map(t => t.est);
+
+    if(estados.length && estados.every(e => e === 'Realizada')) {
+        return '#abd7ab';
+    }
+
+    if(estados.some(e => e === 'Por Realizar')) {
+        return '#efb1af';
+    }
+
+    if(estados.length && estados.every(e => e === 'Sem Efeito')) {
+        return '#c7cbd1';
+    }
+
+    return '#94a3b8';
+}
+
+function tarEstadoAlterado(id, taskIdx, selectEl) {
+    if(!selectEl) return;
+
+    selectEl.classList.remove(
+        'tar-status-por-realizar',
+        'tar-status-realizada',
+        'tar-status-sem-efeito'
+    );
+
+    const classe = getTarStatusClass(selectEl.value);
+
+    if(classe) {
+        selectEl.classList.add(classe);
+    }
+
+    const btn = document.getElementById(`tar-save-${id}-${taskIdx}`);
+
+    const item = DB.tar.find(t => t.id === id);
+
+    const tarefas = item?.tarefas?.length
+        ? item.tarefas
+        : [{
+            est: item?.est || 'Por Realizar'
+        }];
+
+    const estadoOriginal = tarefas[taskIdx]?.est || 'Por Realizar';
+
+    if(btn) {
+        btn.style.display =
+            selectEl.value !== estadoOriginal
+                ? 'inline-block'
+                : 'none';
+    }
+}
+
+async function saveTarEstado(id, taskIdx) {
+    const item = DB.tar.find(t => t.id === id);
+
+    if(!item) return;
+
+    const selectEl = document.getElementById(`tar-est-${id}-${taskIdx}`);
+
+    const btn = document.getElementById(`tar-save-${id}-${taskIdx}`);
+
+    if(!selectEl) return;
+
+    const tarefas = item.tarefas && item.tarefas.length
+        ? [...item.tarefas]
+        : [{
+            txt: item.txt || '',
+            assigned: item.assigned || [],
+            est: item.est || 'Por Realizar'
+        }];
+
+    if(!tarefas[taskIdx]) return;
+
+    const novoEstado = selectEl.value;
+
+    if(novoEstado === tarefas[taskIdx].est) {
+        if(btn) btn.style.display = 'none';
+        return;
+    }
+
+    const old = JSON.parse(JSON.stringify(item));
+
+    tarefas[taskIdx] = {
+        ...tarefas[taskIdx],
+        est: novoEstado
+    };
+
+    const now = new Date().toLocaleString();
+
+    const data = {
+        ...item,
+        tarefas,
+        txt: tarefas[0]?.txt || '',
+        assigned: tarefas[0]?.assigned || [],
+        est: tarefas[0]?.est || 'Por Realizar',
+        u_edit: user.u,
+        d_edit: now
+    };
+
+    const log = generateDiff(old, data);
+
+    await db.ref(`tar/${id}`).set(data);
+
+    if(log) {
+        await db.ref(`hist/${id}`).push({
+            u: user.u,
+            ts: now,
+            log,
+            d_crea: data.d_crea
+        });
+    }
+
+    createNotif(
+        'tar',
+        `[TAREFAS - Alterada] Obra: ${data.obrNom} | Tarefa: ${tarefas[taskIdx].txt} | Estado: ${novoEstado}`
+    );
+
+    const localIndex = DB.tar.findIndex(t => t.id === id);
+
+    if(localIndex >= 0) {
+        DB.tar[localIndex] = JSON.parse(JSON.stringify(data));
+    }
+
+    if(btn) btn.style.display = 'none';
+
+    renderTar();
+}
+    
+function addTarRow(val = {
+    txt: '',
+    assigned: [],
+    est: 'Por Realizar'
+}) {
+    const tbody = document.getElementById('tar-body');
+
+    if(!tbody) return;
+
+    tarRowIdx++;
+
+    const rid = `tarrow_${Date.now()}_${tarRowIdx}`;
+
+    const userOpts = DB.users
+        .map(u => `
+            <option value="${u.u}" ${(val.assigned || []).includes(u.u) ? 'selected' : ''}>
+                ${u.u} (${u.role})
+            </option>
+        `)
+        .join('');
+
+    const statusClass = getTarStatusClass(val.est);
+
+    const tr = document.createElement('tr');
+
+    tr.id = rid;
+
+    tr.innerHTML = `
+        <td>
+            <textarea class="tar-row-txt"
+                      rows="2"
+                      style="width:100%;">${val.txt || ''}</textarea>
+        </td>
+
+        <td>
+            <select class="tar-row-users"
+                    multiple
+                    style="height:70px; width:100%;">
+                ${userOpts}
+            </select>
+        </td>
+
+        <td>
+            <select class="tar-row-est tar-status-select ${statusClass}"
+                    style="width:100%;">
+                <option ${val.est === 'Por Realizar' ? 'selected' : ''}>
+                    Por Realizar
+                </option>
+                <option ${val.est === 'Realizada' ? 'selected' : ''}>
+                    Realizada
+                </option>
+                <option ${val.est === 'Sem Efeito' ? 'selected' : ''}>
+                    Sem Efeito
+                </option>
+            </select>
+        </td>
+
+        <td style="text-align:center;">
+            <button type="button"
+                    onclick="this.closest('tr').remove()"
+                    style="color:#dc2626; border:none; background:#fef2f2; cursor:pointer; padding:5px 8px; border-radius:4px; font-weight:bold;">
+                🗑️
+            </button>
+        </td>
+    `;
+
+    const estSelect = tr.querySelector('.tar-row-est');
+
+    estSelect.addEventListener('change', function() {
+        this.classList.remove(
+            'tar-status-por-realizar',
+            'tar-status-realizada',
+            'tar-status-sem-efeito'
+        );
+
+        const cls = getTarStatusClass(this.value);
+
+        if(cls) {
+            this.classList.add(cls);
+        }
+    });
+
+    tbody.appendChild(tr);
+}
+
 let neRowIdx = 0;
 
 let consultaFornecedorRowIdx = 0;
@@ -2753,25 +3055,127 @@ function clearConsultaFilters() {
 }
 
 function renderTar() {
-    const list = document.getElementById('list-tar'); if(!list) return;
+    const list = document.getElementById('list-tar');
+
+    if(!list) return;
+
     list.innerHTML = '';
-    const fEst = document.getElementById('filt-tar-est') ? document.getElementById('filt-tar-est').value : '';
+
+    const fEst = document.getElementById('filt-tar-est')
+        ? document.getElementById('filt-tar-est').value
+        : '';
+
     const fObr = document.getElementById('filt-tar-obr')?.value || '';
-	let data = DB.tar.filter(t =>
-    	(!fObr || (t.obrNom || '').trim() === fObr.trim()) && (!fEst || t.est === fEst));
+
+    let data = DB.tar.filter(t => {
+
+        const tarefas = t.tarefas && t.tarefas.length
+            ? t.tarefas
+            : [{
+                txt: t.txt || '',
+                assigned: t.assigned || [],
+                est: t.est || 'Por Realizar'
+            }];
+
+        const matchObra =
+            !fObr ||
+            (t.obrNom || '').trim() === fObr.trim();
+
+        const matchEstado =
+            !fEst ||
+            tarefas.some(task => task.est === fEst);
+
+        return matchObra && matchEstado;
+    });
 
     data.forEach(t => {
+
+        const tarefas = t.tarefas && t.tarefas.length
+            ? t.tarefas
+            : [{
+                txt: t.txt || '',
+                assigned: t.assigned || [],
+                est: t.est || 'Por Realizar'
+            }];
+
+        let tarefasHtml = '';
+
+        tarefas.forEach((task, taskIdx) => {
+
+            const statusClass = getTarStatusClass(task.est);
+
+            tarefasHtml += `
+                <tr>
+                    <td style="width:40%;">
+                        ${task.txt || ''}
+                    </td>
+
+                    <td style="width:25%;">
+                        ${(task.assigned || []).join(', ')}
+                    </td>
+
+                    <td style="width:25%;">
+                        <select
+                            id="tar-est-${t.id}-${taskIdx}"
+                            class="tar-status-select ${statusClass}"
+                            onchange="tarEstadoAlterado('${t.id}', ${taskIdx}, this)"
+                            style="width:100%;">
+                            <option ${task.est === 'Por Realizar' ? 'selected' : ''}>
+                                Por Realizar
+                            </option>
+                            <option ${task.est === 'Realizada' ? 'selected' : ''}>
+                                Realizada
+                            </option>
+                            <option ${task.est === 'Sem Efeito' ? 'selected' : ''}>
+                                Sem Efeito
+                            </option>
+                        </select>
+
+                        <button
+                            id="tar-save-${t.id}-${taskIdx}"
+                            onclick="saveTarEstado('${t.id}', ${taskIdx})"
+                            style="display:none; margin-top:4px; padding:4px 8px; border:1px solid #b7d5b7; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold; background:#d9efd9; color:#166534;">
+                            💾 Gravar
+                        </button>
+                    </td>
+
+                    <td style="width:10%; text-align:center;">
+                        <button
+                            type="button"
+                            onclick="prepEdit('${'tar'}','${t.id}')"
+                            style="padding:4px 7px; border:none; border-radius:4px; background:#e2e8f0; cursor:pointer;">
+                            ✏️
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
         list.innerHTML += `
-            <div class="card">
+            <div class="card" style="border-left-color:${getTarBorderColor(tarefas)};">
                 <input type="checkbox" class="chk-mass" value="${t.id}">
-                <div class="card-grid">
-                    <div><b>Obra:</b> ${t.obrNom}</div>
-                    <div><b>Estado:</b> ${t.est}</div>
-                    <div class="full-w"><b>Tarefa:</b> ${t.txt}</div>
-                    <div class="full-w"><b>Atribuído a:</b> ${(t.assigned || []).join(', ')}</div>
+
+                <div style="margin-bottom:10px;">
+                    <b>Obra:</b> ${t.obrNom}
                 </div>
+
+                <table class="ne-table">
+                    <thead>
+                        <tr>
+                            <th>Tarefa</th>
+                            <th>Atribuído a</th>
+                            <th>Estado</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tarefasHtml}
+                    </tbody>
+                </table>
+
                 ${getCardButtons('tar', t)}
-            </div>`;
+            </div>
+        `;
     });
 }
 
@@ -2920,15 +3324,21 @@ function prepEdit(mod, id) {
         document.getElementById('ped-guia').value = item.guia || '';
         document.getElementById('ped-ne').value = item.neNum || '';
         } else if(mod === 'tar') {
-        document.getElementById('tar-txt').value = item.txt;
         document.getElementById('tar-obr').value = item.obrId;
-        document.getElementById('tar-est').value = item.est;
-        // Si usas multiselect para usuarios:
-        if(item.assigned){
-    		Array.from(document.getElementById('tar-users').options).forEach(opt=>{
-        		opt.selected = item.assigned.includes(opt.value);
-   			 });
-		}
+
+        document.getElementById('tar-body').innerHTML = '';
+
+        const tarefasExistentes = item.tarefas && item.tarefas.length
+            ? item.tarefas
+            : [{
+                txt: item.txt || '',
+                assigned: item.assigned || [],
+                est: item.est || 'Por Realizar'
+            }];
+
+        tarefasExistentes.forEach(tarefa => {
+            addTarRow(tarefa);
+        });
     } else if(mod === 'obs') {
         document.getElementById('obs-txt').value = item.txt;
         document.getElementById('obs-obr').value = item.obrId;
@@ -2967,10 +3377,16 @@ function cancelarEdit(mod) {
         form.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
     }
     if(document.getElementById(`${pre}-cancel`)) document.getElementById(`${pre}-cancel`).style.display = 'none';
-        if(mod === 'ne') {
+    if(mod === 'ne') {
         document.getElementById('ne-body').innerHTML = '';
         autoNumNE();
         addNERow();
+    }
+
+    if(mod === 'tar') {
+        document.getElementById('tar-body').innerHTML = '';
+        tarRowIdx = 0;
+        addTarRow();
     }
 
     if(mod === 'consultas') {
