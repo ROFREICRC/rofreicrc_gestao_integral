@@ -84,15 +84,15 @@
         }
 
         .consulta-status-pendente {
-            background: #f8e8b8 !important;
-            color: #78350f;
-            border-color: #e8cf91 !important;
-        }
-
-        .consulta-status-enviada {
             background: #fce3c7 !important;
             color: #7c2d12;
             border-color: #f3c28e !important;
+        }
+
+        .consulta-status-enviada {
+            background: #f8e8b8 !important;
+            color: #78350f;
+            border-color: #e8cf91 !important;
         }
 
         .consulta-status-entregue {
@@ -423,6 +423,11 @@
                         <div class="full-w">
                             <label>Descrição curta da consulta</label>
                             <input type="text" id="consulta-desc" placeholder="Descreva brevemente o que pretende consultar aos fornecedores">
+                        </div>
+
+                        <div class="full-w">
+                            <label>Observações da consulta</label>
+                            <textarea id="consulta-obs" rows="3" placeholder="Introduza observações gerais relacionadas com esta consulta..."></textarea>
                         </div>
                     </div>
                 </div>
@@ -1119,22 +1124,69 @@ async function saveRecord(mod) {
 }
 
 
+function formatHistoryValue(value) {
+    if(value === null || value === undefined || value === '') {
+        return 'Vazio';
+    }
+
+    if(Array.isArray(value)) {
+        return value.map(v => formatHistoryValue(v)).join(' | ');
+    }
+
+    if(typeof value === 'object') {
+        if(Array.isArray(value)) {
+            return value.map(v => formatHistoryValue(v)).join(' | ');
+        }
+
+        const entries = Object.entries(value);
+
+        if(entries.length === 0) {
+            return 'Vazio';
+        }
+
+        return entries.map(([key, val]) => {
+            if(key === '0' || /^\d+$/.test(key)) {
+                return `${key}: ${formatHistoryValue(val)}`;
+            }
+
+            return `${key}: ${formatHistoryValue(val)}`;
+        }).join(' ; ');
+    }
+
+    return String(value);
+}
+
 function generateDiff(oldData, newData) {
     if(!oldData) return "<b>Criação inicial do registo.</b>";
+
     let diffs = [];
-    // Ignoramos campos técnicos para que no saturen el historial
-    const ignore = ['d_edit', 'u_edit', 'files', 'notas', 'd_crea', 'u_crea', 'id', 'items'];
-    
+
+    const ignore = [
+        'd_edit',
+        'u_edit',
+        'files',
+        'notas',
+        'd_crea',
+        'u_crea',
+        'id',
+        'items'
+    ];
+
     for(let k in newData) {
         if(ignore.includes(k)) continue;
-        
-        let oldVal = oldData[k] || "Vazio";
-        let newVal = newData[k] || "Vazio";
-        
-        if(JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-            diffs.push(`Alteração em <b>${k}</b>: <span style="color:red">"${oldVal}"</span> ➔ <span style="color:green">"${newVal}"</span>`);
+
+        const oldVal = formatHistoryValue(oldData[k]);
+        const newVal = formatHistoryValue(newData[k]);
+
+        if(oldVal !== newVal) {
+            diffs.push(
+                `Alteração em <b>${k}</b>: ` +
+                `<span style="color:red">"${oldVal}"</span> ➔ ` +
+                `<span style="color:green">"${newVal}"</span>`
+            );
         }
     }
+
     return diffs.length > 0 ? diffs.join("<br>") : null;
 }
 
@@ -1360,6 +1412,7 @@ async function saveConsulta(isDraft = false) {
     const num = document.getElementById('consulta-num').value;
     const obrSel = document.getElementById('consulta-obr');
     const descricao = document.getElementById('consulta-desc').value.trim();
+    const observacoes = document.getElementById('consulta-obs').value.trim();
 
     if(!num) {
         autoNumConsulta();
@@ -1450,6 +1503,7 @@ async function saveConsulta(isDraft = false) {
         obrId: obrSel.value,
         obrNom: obrSel.options[obrSel.selectedIndex].text,
         descricao,
+        observacoes,
         fornecedores,
         items,
         est: isDraft ? 'Rascunho' : estadoGlobal,
@@ -1864,6 +1918,7 @@ function renderAll() {
     populateObraFilter('filt-obs-obr', DB.obs);
     populateObraFilter('filt-ne-obr', DB.ne);
     populateObrasConsulta();
+    populateObraFilter('filt-consulta-obr', DB.consultas);
     populateObraFilter('filt-ped-obr', DB.ped);
     populateObraFilter('filt-tar-obr', DB.tar);
     try { renderObras(); } catch(e) { console.error("Erro Obras:", e); }
@@ -2581,7 +2636,8 @@ function renderConsultas() {
     data.reverse().forEach(c => {
 
         const fornecedoresResumo = (c.fornecedores || []).map((f, idx) => `
-            <span style="display:inline-block; margin:2px 4px 2px 0; padding:3px 6px; border-radius:4px; font-size:9px; font-weight:bold; background:#f1f5f9;">
+            <span class="consulta-status-select ${getConsultaStatusClass(f.est)}"
+                  style="display:inline-block; margin:2px 4px 2px 0; padding:4px 7px; border-radius:4px; font-size:9px; font-weight:bold; border-width:1px;">
                 ${f.nome} — ${f.est}
             </span>
         `).join('');
@@ -3538,7 +3594,7 @@ function renderConsultaGestao(id) {
         }).join('');
 
     const fornecedoresHtml = (consulta.fornecedores || []).map((f, idx) => `
-        <tr>
+        <tr class="consulta-gestao-fornecedor-row">
             <td>
                 <input type="text"
                        class="consulta-g-forn"
@@ -3607,7 +3663,10 @@ function renderConsultaGestao(id) {
 
     const comparativoBody = (consulta.items || []).map((item, itemIdx) => {
 
-        const preços = (consulta.fornecedores || []).map((f, fIdx) => `
+    const preços = (consulta.fornecedores || []).map((f, fIdx) => {
+        const incluirPDF = f.incluirPDF?.[itemIdx] !== false;
+
+        return `
             <td>
                 <input
                     type="number"
@@ -3619,6 +3678,7 @@ function renderConsultaGestao(id) {
                     placeholder="€"
                     oninput="atualizarTotalComparativo(this)"
                 >
+
                 <div style="font-size:9px; color:#64748b; margin-top:2px;">
                     Total:
                     <span class="consulta-total-preco"
@@ -3627,8 +3687,18 @@ function renderConsultaGestao(id) {
                         ${((Number(item.q) || 0) * (Number(f.precos?.[itemIdx]) || 0)).toFixed(2)}
                     </span> €
                 </div>
+
+                <label style="display:block; margin-top:5px; font-size:9px; cursor:pointer;">
+                    <input type="checkbox"
+                           class="consulta-incluir-pdf"
+                           data-fidx="${fIdx}"
+                           data-iidx="${itemIdx}"
+                           ${incluirPDF ? 'checked' : ''}>
+                    Incluir no PDF
+                </label>
             </td>
-        `).join('');
+        `;
+    }).join('');
 
         const adjudicado = consulta.adjudicacoes?.[itemIdx] ?? '';
 
@@ -3639,17 +3709,41 @@ function renderConsultaGestao(id) {
         `).join('');
 
         return `
-            <tr>
-                <td>${item.q || ''}</td>
-                <td>${item.u || ''}</td>
-                <td>${item.p || ''}</td>
+            <tr class="consulta-material-row">
+                <td>
+                    <input type="number"
+                           class="consulta-g-q"
+                           value="${item.q || ''}">
+                </td>
+
+                <td>
+                    <input type="text"
+                           class="consulta-g-u"
+                           value="${item.u || ''}">
+                </td>
+
+                <td>
+                    <input type="text"
+                           class="consulta-g-p"
+                           value="${item.p || ''}">
+                </td>
+
                 ${preços}
+
                 <td>
                     <select class="consulta-adjudicado"
                             data-iidx="${itemIdx}">
                         <option value="">-- Selecionar --</option>
                         ${adjudicacaoOptions}
                     </select>
+                </td>
+
+                <td style="text-align:center;">
+                    <button type="button"
+                            onclick="this.closest('tr').remove()"
+                            style="color:#dc2626; border:none; background:#fef2f2; cursor:pointer; padding:5px 8px; border-radius:4px; font-weight:bold;">
+                        🗑️
+                    </button>
                 </td>
             </tr>
         `;
@@ -3678,6 +3772,12 @@ function renderConsultaGestao(id) {
                     <input type="text"
                            class="consulta-g-desc"
                            value="${consulta.descricao || ''}">
+                </div>
+
+                <div class="full-w">
+                    <label>Observações da consulta</label>
+                    <textarea class="consulta-g-obs-geral"
+                              rows="3">${consulta.observacoes || ''}</textarea>
                 </div>
             </div>
 
@@ -3711,6 +3811,7 @@ function renderConsultaGestao(id) {
                             <th>Produto / Material</th>
                             ${comparativoHead}
                             <th>Fornecedor Adjudicado</th>
+                            <th>Ação</th>
                         </tr>
                     </thead>
 
@@ -3719,6 +3820,12 @@ function renderConsultaGestao(id) {
                     </tbody>
                 </table>
             </div>
+
+            <button type="button"
+                    onclick="addConsultaMaterialGestao('${id}')"
+                    style="margin-top:10px; padding:6px 10px; cursor:pointer; background:var(--s); color:white; border:none; border-radius:3px;">
+                + Adicionar Material
+            </button>
 
             <div class="actions" style="margin-top:15px;">
                 <button class="b-file"
@@ -3733,6 +3840,85 @@ function renderConsultaGestao(id) {
             </div>
         </div>
     `;
+}
+
+function addConsultaMaterialGestao(id) {
+    const container = document.getElementById(`consulta-gestao-${id}`);
+    const consulta = DB.consultas.find(c => c.id === id);
+
+    if(!container || !consulta) return;
+
+    const tbody = container.querySelector('.consulta-comparativo tbody');
+
+    if(!tbody) return;
+
+    const itemIdx = tbody.querySelectorAll('.consulta-material-row').length;
+    const fornecedores = consulta.fornecedores || [];
+
+    const preços = fornecedores.map((f, fIdx) => `
+        <td>
+            <input
+                type="number"
+                step="0.01"
+                class="consulta-preco"
+                data-fidx="${fIdx}"
+                data-iidx="${itemIdx}"
+                value=""
+                placeholder="€"
+                oninput="atualizarTotalComparativo(this)"
+            >
+
+            <div style="font-size:9px; color:#64748b; margin-top:2px;">
+                Total:
+                <span class="consulta-total-preco"
+                      data-fidx="${fIdx}"
+                      data-iidx="${itemIdx}">
+                    0.00
+                </span> €
+            </div>
+        </td>
+    `).join('');
+
+    const adjudicacaoOptions = fornecedores.map((f, fIdx) => `
+        <option value="${fIdx}">${f.nome}</option>
+    `).join('');
+
+    const tr = document.createElement('tr');
+
+    tr.className = 'consulta-material-row';
+
+    tr.innerHTML = `
+        <td>
+            <input type="number" class="consulta-g-q" value="">
+        </td>
+
+        <td>
+            <input type="text" class="consulta-g-u" value="">
+        </td>
+
+        <td>
+            <input type="text" class="consulta-g-p" value="">
+        </td>
+
+        ${preços}
+
+        <td>
+            <select class="consulta-adjudicado" data-iidx="${itemIdx}">
+                <option value="">-- Selecionar --</option>
+                ${adjudicacaoOptions}
+            </select>
+        </td>
+
+        <td style="text-align:center;">
+            <button type="button"
+                    onclick="this.closest('tr').remove()"
+                    style="color:#dc2626; border:none; background:#fef2f2; cursor:pointer; padding:5px 8px; border-radius:4px; font-weight:bold;">
+                🗑️
+            </button>
+        </td>
+    `;
+
+    tbody.appendChild(tr);
 }
 
 function atualizarTotalComparativo(input) {
@@ -3770,10 +3956,13 @@ async function saveConsultaGestao(id) {
 
     const obrEl = container.querySelector('.consulta-g-obr');
     const descEl = container.querySelector('.consulta-g-desc');
+    const obsGeralEl = container.querySelector('.consulta-g-obs-geral');
 
     const fornecedores = [];
 
-    container.querySelectorAll('tbody tr').forEach(tr => {
+    const fornecedorRows = container.querySelectorAll('.consulta-gestao-fornecedor-row');
+
+    fornecedorRows.forEach((tr, fIdx) => {
         const nomeEl = tr.querySelector('.consulta-g-forn');
 
         if(!nomeEl) return;
@@ -3781,6 +3970,8 @@ async function saveConsultaGestao(id) {
         const nome = nomeEl.value.trim();
 
         if(!nome) return;
+
+        const fornecedorOriginal = consulta.fornecedores?.[fIdx] || {};
 
         const fornecedor = DB.forn.find(f =>
             (f.nome || '').toLowerCase() === nome.toLowerCase()
@@ -3792,12 +3983,13 @@ async function saveConsultaGestao(id) {
         const obsEl = tr.querySelector('.consulta-g-obs');
 
         fornecedores.push({
+            ...fornecedorOriginal,
             nome,
-            fornecedorId: fornecedor ? fornecedor.id : null,
-            d_envio: envioEl?.value || '',
-            d_resposta: respostaEl?.value || '',
+            fornecedorId: fornecedor ? fornecedor.id : (fornecedorOriginal.fornecedorId || null),
+            d_envio: envioEl?.value || fornecedorOriginal.d_envio || '',
+            d_resposta: respostaEl?.value || fornecedorOriginal.d_resposta || '',
             obs: obsEl?.value || '',
-            est: estadoEl?.value || 'Pendente de solicitar ao fornecedor',
+            est: estadoEl?.value || fornecedorOriginal.est || 'Pendente de solicitar ao fornecedor',
             precos: {}
         });
     });
@@ -3816,9 +4008,11 @@ async function saveConsultaGestao(id) {
 
     container.querySelectorAll('.consulta-comparativo tbody tr').forEach((tr, itemIdx) => {
 
-        const baseItem = consulta.items[itemIdx];
+        const q = tr.querySelector('.consulta-g-q')?.value || '';
+        const u = tr.querySelector('.consulta-g-u')?.value || '';
+        const p = tr.querySelector('.consulta-g-p')?.value || '';
 
-        if(!baseItem) return;
+        if(!q || !p) return;
 
         const precos = {};
 
@@ -3832,8 +4026,18 @@ async function saveConsultaGestao(id) {
         });
 
         items.push({
-            ...baseItem,
-            precos
+            q,
+            u,
+            p,
+            pr: '',
+            t: ''
+        });
+
+        consulta.fornecedores.forEach((fornecedor, fIdx) => {
+            if(!fornecedor.precos) fornecedor.precos = {};
+            if(precos[fIdx] !== undefined) {
+                fornecedor.precos[itemIdx] = precos[fIdx];
+            }
         });
     });
 
@@ -3852,6 +4056,7 @@ async function saveConsultaGestao(id) {
             ? obrEl.options[obrEl.selectedIndex].text
             : consulta.obrNom,
         descricao: descEl ? descEl.value.trim() : consulta.descricao,
+        observacoes: obsGeralEl ? obsGeralEl.value.trim() : (consulta.observacoes || ''),
         fornecedores,
         items,
         adjudicacoes,
@@ -3924,7 +4129,7 @@ function gerarPDFConsulta(id, fornecedorIdx) {
 
     doc.setFontSize(14)
        .setFont(undefined, 'bold')
-       .text("CONSULTA AO FORNECEDOR", 200, 15, {align:"right"});
+	   .text("CONSULTA", 200, 15, {align:"right"});
 
     doc.setFontSize(10)
        .setFont(undefined, 'normal')
@@ -3967,13 +4172,22 @@ function gerarPDFConsulta(id, fornecedorIdx) {
         68
     );
 
-    const tableData = (consulta.items || []).map(i => [
-        Number(i.q || 0).toFixed(2).replace('.', ','),
-        i.u || '',
-        i.p || '',
-        '',
-        ''
-    ]);
+    const tableData = (consulta.items || [])
+        .map((item, itemIdx) => ({
+            item,
+            itemIdx
+        }))
+        .filter(({item, itemIdx}) => {
+            const incluirPDF = fornecedor.incluirPDF?.[itemIdx];
+            return incluirPDF !== false;
+        })
+        .map(({item}) => [
+            Number(item.q || 0).toFixed(2).replace('.', ','),
+            item.u || '',
+            item.p || '',
+            fornecedor.precos?.[consulta.items.indexOf(item)] || '',
+            ((Number(item.q) || 0) * (Number(fornecedor.precos?.[consulta.items.indexOf(item)]) || 0)).toFixed(2)
+        ]);
 
     doc.autoTable({
         head: [['Qtd','Un','Produto / Material','Preço Un.','Total']],
@@ -4004,7 +4218,7 @@ function gerarPDFConsulta(id, fornecedorIdx) {
     doc.setFontSize(9)
        .setFont(undefined, 'normal');
 
-    const obs = fornecedor.obs || 'N/A';
+    const obs = consulta.observacoes || '---';
     const splitObs = doc.splitTextToSize(obs, 180);
 
     doc.text(splitObs, 10, condY + 6);
@@ -4020,8 +4234,10 @@ function gerarPDFConsulta(id, fornecedorIdx) {
            .setFont(undefined, 'bold')
            .setTextColor(37, 99, 235);
 
+        const dataEmissaoPDF = new Date().toLocaleString();
+
         doc.text(
-            `Documento gerado por: ${consulta.u_crea} em ${consulta.d_crea}`,
+            `Documento gerado por: ${consulta.u_crea} em ${dataEmissaoPDF}`,
             105,
             footerY - 5,
             {align:"center"}
