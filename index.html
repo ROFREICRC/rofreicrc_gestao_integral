@@ -441,7 +441,7 @@
                                 <th>Fornecedor</th>
                                 <th>Data de Envio</th>
                                 <th>Data de Receção</th>
-                                <th>Observações</th>
+                                <th>Observações internas RofreiCRC</th>
                                 <th>PDF</th>
                                 <th>Estado</th>
                                 <th>Ação</th>
@@ -3881,7 +3881,7 @@ const comparativoHead = (consulta.fornecedores || []).map((f, fIdx) => {
                                 <th>Fornecedor</th>
                                 <th>Data de Envio</th>
                                 <th>Data de Receção</th>
-                                <th>Observações</th>
+                                <th>Observações internas RofreiCRC</th>
                                 <th>PDF</th>
                                 <th>Estado</th>
                                 <th>Ação</th>
@@ -3997,6 +3997,11 @@ async function transferirConsultaParaNE(id, fornecedorIdx) {
         fornecedor,
         materiaisSelecionados
     );
+
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
 
     alert(
         `Informação preparada para criar a N.E. do fornecedor "${fornecedor.nome}".`
