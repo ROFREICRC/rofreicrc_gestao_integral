@@ -2110,7 +2110,20 @@ function consultaEstadoFornecedorAlterado(selectEl) {
     const novoEstado = selectEl.value;
 
     if(novoEstado === estadoAnterior) {
-        selectEl.className = `consulta-status-select ${getConsultaStatusClass(novoEstado)}`;
+        selectEl.classList.remove(
+            'consulta-status-pendente',
+            'consulta-status-enviada',
+            'consulta-status-entregue',
+            'consulta-status-sem-efeito',
+            'consulta-status-rascunho'
+        );
+
+        const classeEstadoAtual = getConsultaStatusClass(novoEstado);
+
+        if(classeEstadoAtual) {
+            selectEl.classList.add(classeEstadoAtual);
+        }
+
         return;
     }
 
@@ -2120,7 +2133,21 @@ function consultaEstadoFornecedorAlterado(selectEl) {
 
     if(!confirmar) {
         selectEl.value = estadoAnterior;
-        selectEl.className = `consulta-status-select ${getConsultaStatusClass(estadoAnterior)}`;
+
+        selectEl.classList.remove(
+            'consulta-status-pendente',
+            'consulta-status-enviada',
+            'consulta-status-entregue',
+            'consulta-status-sem-efeito',
+            'consulta-status-rascunho'
+        );
+
+        const classeEstadoAnterior = getConsultaStatusClass(estadoAnterior);
+
+        if(classeEstadoAnterior) {
+            selectEl.classList.add(classeEstadoAnterior);
+        }
+
         return;
     }
 
@@ -2135,7 +2162,20 @@ function consultaEstadoFornecedorAlterado(selectEl) {
     }
 
     selectEl.dataset.estadoOriginal = novoEstado;
-    selectEl.className = `consulta-status-select ${getConsultaStatusClass(novoEstado)}`;
+
+    selectEl.classList.remove(
+        'consulta-status-pendente',
+        'consulta-status-enviada',
+        'consulta-status-entregue',
+        'consulta-status-sem-efeito',
+        'consulta-status-rascunho'
+    );
+
+    const novaClasseEstado = getConsultaStatusClass(novoEstado);
+
+    if(novaClasseEstado) {
+        selectEl.classList.add(novaClasseEstado);
+    }
 }
 
 function getPedStatusClass(status) {
@@ -3950,6 +3990,8 @@ async function transferirConsultaParaNE(id, fornecedorIdx) {
         return alert("Nenhum material foi selecionado para a N.E.");
     }
 
+    showMod('ne');
+
     prepararFormularioNEDesdeConsulta(
         consultaAtualizada,
         fornecedor,
@@ -3959,8 +4001,6 @@ async function transferirConsultaParaNE(id, fornecedorIdx) {
     alert(
         `Informação preparada para criar a N.E. do fornecedor "${fornecedor.nome}".`
     );
-
-    showMod('ne');
 }
 
 
@@ -3975,7 +4015,25 @@ function prepararFormularioNEDesdeConsulta(consulta, fornecedor, materiais) {
     const obraSelect = document.getElementById('ne-obr');
 
     if(obraSelect) {
-        obraSelect.value = consulta.obrId;
+        const obraExiste = Array.from(obraSelect.options).some(
+            option => option.value === consulta.obrId
+        );
+
+        if(obraExiste) {
+            obraSelect.value = consulta.obrId;
+        } else {
+            const obra = DB.obras.find(o => o.id === consulta.obrId);
+
+            if(obra) {
+                obraSelect.innerHTML += `
+                    <option value="${obra.id}">
+                        ${obra.num} - ${obra.nom}
+                    </option>
+                `;
+
+                obraSelect.value = obra.id;
+            }
+        }
     }
 
     document.getElementById('ne-prov').value = fornecedor.nome || '';
@@ -4030,24 +4088,15 @@ function addConsultaFornecedorGestao(id) {
         }
     }
 
-    const fornecedorDisponivel = DB.forn.find(f =>
-        !(consulta.fornecedores || []).some(existing =>
-            (existing.fornecedorId && existing.fornecedorId === f.id) ||
-            (existing.nome || '').toLowerCase() === (f.nome || '').toLowerCase()
-        )
-    );
-
-    if(!fornecedorDisponivel) {
-        return alert("Não existem mais fornecedores disponíveis na base de dados.");
-    }
-
     saveConsultaGestao(id, true).then(() => {
 
         const consultaAtualizada = DB.consultas.find(c => c.id === id);
 
+        if(!consultaAtualizada) return;
+
         consultaAtualizada.fornecedores.push({
-            nome: fornecedorDisponivel.nome,
-            fornecedorId: fornecedorDisponivel.id,
+            nome: '',
+            fornecedorId: null,
             d_envio: '',
             d_resposta: '',
             obs: '',
@@ -4068,6 +4117,13 @@ function addConsultaFornecedorGestao(id) {
 
             renderConsultas();
             renderConsultaGestao(id);
+
+            setTimeout(() => {
+                const inputs = document.querySelectorAll(`#consulta-gestao-${id} .consulta-g-forn`);
+                const ultimo = inputs[inputs.length - 1];
+
+                if(ultimo) ultimo.focus();
+            }, 0);
         });
     });
 }
@@ -4281,7 +4337,10 @@ async function saveConsultaGestao(id) {
             d_envio: envioEl?.value || fornecedorOriginal.d_envio || '',
             d_resposta: respostaEl?.value || fornecedorOriginal.d_resposta || '',
             obs: obsEl?.value || '',
-            est: estadoEl?.value || fornecedorOriginal.est || 'Pendente de solicitar ao fornecedor',
+
+            est: estadoEl
+                ? estadoEl.value
+                : (fornecedorOriginal.est || 'Pendente de solicitar ao fornecedor'),
 
             precos: {},
             incluirPDF: {}
