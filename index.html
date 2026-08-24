@@ -791,6 +791,7 @@ let activeNotaId = null;
 let activeFileId = null;
 let massMode = false;
 let consultaGestaoAbertaId = null;
+let consultaGestaoAlterada = false;
 
 // --- LOGIN Y SEGURIDAD ---
 async function doLogin() {
@@ -3648,10 +3649,11 @@ function renderConsultaGestao(id) {
         <tr class="consulta-gestao-fornecedor-row">
             <td>
                 <input type="text"
-                       class="consulta-g-forn"
-                       list="lista-forn-sug"
-                       value="${f.nome || ''}"
-                       style="width:100%;">
+       				   class="consulta-g-forn"
+       				   list="lista-forn-sug"
+       			   	   value="${f.nome || ''}"
+       				   oninput="consultaGestaoAlterada = true"
+          			   style="width:100%;">
             </td>
 
             <td>
@@ -3672,22 +3674,23 @@ function renderConsultaGestao(id) {
 
             <td>
                 <textarea class="consulta-g-obs"
-                          rows="2"
-                          style="width:100%;">${f.obs || ''}</textarea>
+          				  rows="2"
+          				  oninput="consultaGestaoAlterada = true"
+          				  style="width:100%;">${f.obs || ''}</textarea>
             </td>
 
             <td style="text-align:center;">
-                <button onclick="gerarPDFConsulta('${id}', ${idx})"
-                        style="border:none; background:none; cursor:pointer; font-size:18px;">
-                    📄
-                </button>
+            <button onclick="prepararEGerarPDFConsulta('${id}', ${idx})"
+        			style="border:none; background:none; cursor:pointer; font-size:18px;">
+    			📄
+			</button>
             </td>
 
             <td>
                 <select class="consulta-g-est ${getConsultaStatusClass(f.est)}"
-                        onchange="consultaEstadoFornecedorAlterado(this)"
-                        data-estado-original="${f.est || 'Pendente de solicitar ao fornecedor'}"
-                        style="width:100%; min-width:190px;">
+        				onchange="consultaGestaoAlterada = true; consultaEstadoFornecedorAlterado(this)"
+        				data-estado-original="${f.est || 'Pendente de solicitar ao fornecedor'}"
+        				style="width:100%; min-width:190px;">
                     <option ${f.est === 'Pendente de solicitar ao fornecedor' ? 'selected' : ''}>
                         Pendente de solicitar ao fornecedor
                     </option>
@@ -3726,17 +3729,20 @@ const comparativoHead = (consulta.fornecedores || []).map((f, fIdx) => {
     }, 0);
 
     return `
-        <th style="min-width:170px;">
+        <th style="min-width:170px;" data-fornecedor-total="${fIdx}">
             <div style="font-weight:bold;">
                 ${f.nome || 'Fornecedor'}
             </div>
 
             <div style="font-size:10px; color:#166534; margin-top:3px;">
-                Total: € ${totalFornecedor.toLocaleString('pt-PT', {
-                    minimumFractionDigits:2,
-                    maximumFractionDigits:2
-                })}
-            </div>
+    			Total: € 
+    			<span class="consulta-total-fornecedor">
+        			${totalFornecedor.toLocaleString('pt-PT', {
+            			minimumFractionDigits:2,
+            			maximumFractionDigits:2
+        			})}
+    			</span>
+			</div>
 
             <button type="button"
                     onclick="transferirConsultaParaNE('${id}', ${fIdx})"
@@ -3762,7 +3768,7 @@ const comparativoHead = (consulta.fornecedores || []).map((f, fIdx) => {
                     data-iidx="${itemIdx}"
                     value="${f.precos && f.precos[itemIdx] !== undefined ? f.precos[itemIdx] : ''}"
                     placeholder="€"
-                    oninput="atualizarTotalComparativo(this)"
+                    oninput="consultaGestaoAlterada = true; atualizarTotalComparativo(this)"
                 >
 
                 <div style="font-size:9px; color:#64748b; margin-top:2px;">
@@ -3776,10 +3782,11 @@ const comparativoHead = (consulta.fornecedores || []).map((f, fIdx) => {
 
                 <label style="display:block; margin-top:5px; font-size:9px; cursor:pointer;">
                     <input type="checkbox"
-                           class="consulta-incluir-pdf"
-                           data-fidx="${fIdx}"
-                           data-iidx="${itemIdx}"
-                           ${incluirPDF ? 'checked' : ''}>
+       					   class="consulta-incluir-pdf"
+       					   data-fidx="${fIdx}"
+       					   data-iidx="${itemIdx}"
+       					   onchange="consultaGestaoAlterada = true"
+       					   ${incluirPDF ? 'checked' : ''}>
                     Incluir no PDF
                 </label>
             </td>
@@ -3798,8 +3805,9 @@ const comparativoHead = (consulta.fornecedores || []).map((f, fIdx) => {
             <tr class="consulta-material-row">
                 <td>
                     <input type="number"
-                           class="consulta-g-q"
-                           value="${item.q || ''}">
+       					   class="consulta-g-q"
+       					   value="${item.q || ''}"
+       					   oninput="atualizarTodosTotaisConsulta('${id}')">
                 </td>
 
                 <td>
@@ -3926,9 +3934,9 @@ const comparativoHead = (consulta.fornecedores || []).map((f, fIdx) => {
                 </button>
 
                 <button class="b-hist"
-                        onclick="document.getElementById('consulta-gestao-${id}').innerHTML=''">
-                    ✖ Fechar Gestão
-                </button>
+        				onclick="fecharConsultaGestao('${id}')">
+    				✖ Fechar Gestão
+				</button>
             </div>
         </div>
     `;
@@ -4215,7 +4223,7 @@ function addConsultaMaterialGestao(id) {
                 data-iidx="${itemIdx}"
                 value=""
                 placeholder="€"
-                oninput="atualizarTotalComparativo(this)"
+                oninput="consultaGestaoAlterada = true; atualizarTotalComparativo(this)"
             >
 
             <div style="font-size:9px; color:#64748b; margin-top:2px;">
@@ -4272,27 +4280,87 @@ function addConsultaMaterialGestao(id) {
     tbody.appendChild(tr);
 }
 
+function atualizarTodosTotaisConsulta(id) {
+    const container = document.getElementById(`consulta-gestao-${id}`);
+
+    if(!container) return;
+
+    container.querySelectorAll('.consulta-preco').forEach(input => {
+        atualizarTotalComparativo(input);
+    });
+
+    atualizarTotaisFornecedoresEmTempoReal(container);
+}
+
 function atualizarTotalComparativo(input) {
-    const fIdx = input.dataset.fidx;
-    const iIdx = input.dataset.iidx;
-    const consulta = DB.consultas.find(c =>
-        document.getElementById(`consulta-gestao-${c.id}`)?.contains(input)
+    const fIdx = Number(input.dataset.fidx);
+    const iIdx = Number(input.dataset.iidx);
+
+    const container = input.closest('.consulta-gestao');
+
+    if(!container) return;
+
+    const materialRows = container.querySelectorAll('.consulta-material-row');
+    const row = materialRows[iIdx];
+
+    if(!row) return;
+
+    const qtd = Number(
+        row.querySelector('.consulta-g-q')?.value || 0
     );
 
-    if(!consulta) return;
+    const preco = Number(input.value || 0);
 
-    const item = consulta.items[iIdx];
-    const totalEl = document.querySelector(
+    const totalEl = row.querySelector(
         `.consulta-total-preco[data-fidx="${fIdx}"][data-iidx="${iIdx}"]`
     );
 
     if(totalEl) {
-        totalEl.innerText =
-            ((Number(item.q) || 0) * (Number(input.value) || 0)).toFixed(2);
+        totalEl.innerText = (qtd * preco).toFixed(2);
     }
+
+    atualizarTotaisFornecedoresEmTempoReal(container);
 }
 
-async function saveConsultaGestao(id) {
+function atualizarTotaisFornecedoresEmTempoReal(container) {
+    if(!container) return;
+
+    const fornecedores = container.querySelectorAll(
+        '.consulta-comparativo thead th[data-fornecedor-total]'
+    );
+
+    fornecedores.forEach((th, fIdx) => {
+        let totalFornecedor = 0;
+
+        const materialRows = container.querySelectorAll(
+            '.consulta-material-row'
+        );
+
+        materialRows.forEach((row, itemIdx) => {
+            const qtd = Number(
+                row.querySelector('.consulta-g-q')?.value || 0
+            );
+
+            const precoInput = row.querySelector(
+                `.consulta-preco[data-fidx="${fIdx}"][data-iidx="${itemIdx}"]`
+            );
+
+            const preco = Number(precoInput?.value || 0);
+
+            totalFornecedor += qtd * preco;
+        });
+
+        const totalEl = th.querySelector('.consulta-total-fornecedor');
+
+        if(totalEl) {
+            totalEl.innerText = totalFornecedor.toLocaleString('pt-PT', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+    });
+}
+async function saveConsultaGestao(id, silencioso = false) {
     const consulta = DB.consultas.find(c => c.id === id);
 
     if(!consulta) return;
@@ -4457,12 +4525,63 @@ async function saveConsultaGestao(id) {
         DB.consultas.push(JSON.parse(JSON.stringify(data)));
     }
 
-    alert("Consulta atualizada com sucesso!");
+    if(!silencioso) {
+        alert("Consulta atualizada com sucesso!");
+    }
 
+    consultaGestaoAlterada = false;
     consultaGestaoAbertaId = id;
 
     renderConsultas();
     renderConsultaGestao(id);
+}
+
+function fecharConsultaGestao(id) {
+    if(consultaGestaoAlterada) {
+
+        const guardar = confirm(
+            "Existem alterações realizadas nesta Consulta.\n\n" +
+            "Deseja gravar as alterações antes de fechar a Gestão?"
+        );
+
+        if(guardar) {
+            saveConsultaGestao(id).then(() => {
+                const container = document.getElementById(`consulta-gestao-${id}`);
+
+                if(container) {
+                    container.innerHTML = '';
+                }
+
+                consultaGestaoAbertaId = null;
+                consultaGestaoAlterada = false;
+            });
+
+            return;
+        }
+
+        const fecharSemGuardar = confirm(
+            "As alterações realizadas serão perdidas.\n\n" +
+            "Deseja fechar sem guardar?"
+        );
+
+        if(!fecharSemGuardar) {
+            return;
+        }
+    }
+
+    const container = document.getElementById(`consulta-gestao-${id}`);
+
+    if(container) {
+        container.innerHTML = '';
+    }
+
+    consultaGestaoAbertaId = null;
+    consultaGestaoAlterada = false;
+}
+
+async function prepararEGerarPDFConsulta(id, fornecedorIdx) {
+    await saveConsultaGestao(id, true);
+    gerarPDFConsulta(id, fornecedorIdx);
 }
 
 function gerarPDFConsulta(id, fornecedorIdx) {
