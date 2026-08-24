@@ -713,6 +713,7 @@
                 <div class="grid">
                     <div><label>Nome do Utilizador</label><input type="text" id="u-nom"></div>
                     <div><label>Senha</label><input type="text" id="u-pwd"></div>
+                    <div><label>E-mail</label><input type="email" id="u-email"></div>
                     <div><label>Credencial</label><select id="u-rol"><option>Utilizador</option><option>Administrador</option></select></div>
                     <div><label>Estado</label><select id="u-est"><option>Ativo</option><option>Suspenso</option></select></div>
                 </div>
@@ -1163,6 +1164,7 @@ async function saveRecord(mod) {
     } else if(mod === 'users') {
         data.u = document.getElementById('u-nom').value;
         data.p = document.getElementById('u-pwd').value;
+        data.email = document.getElementById('u-email').value.trim();
         data.role = document.getElementById('u-rol').value;
         data.st = document.getElementById('u-est').value;
     }
@@ -1403,6 +1405,79 @@ async function saveTarEstado(id, taskIdx) {
     renderTar();
 }
     
+function criarEmailTarefa(id, taskIdx) {
+
+    const item = DB.tar.find(t => t.id === id);
+
+    if(!item) {
+        return alert("Não foi possível localizar o registo da tarefa.");
+    }
+
+    const tarefas = item.tarefas && item.tarefas.length
+        ? item.tarefas
+        : [{
+            txt: item.txt || '',
+            assigned: item.assigned || [],
+            est: item.est || 'Por Realizar'
+        }];
+
+    const tarefa = tarefas[taskIdx];
+
+    if(!tarefa) {
+        return alert("Não foi possível localizar a tarefa selecionada.");
+    }
+
+    const destinatarios = (tarefa.assigned || [])
+        .map(nomeUtilizador => {
+            const utilizador = DB.users.find(u =>
+                u.u === nomeUtilizador
+            );
+
+            return utilizador?.email || '';
+        })
+        .filter(email => email.trim() !== '');
+
+    if(destinatarios.length === 0) {
+        return alert(
+            "Não foi encontrado nenhum endereço de e-mail para os utilizadores atribuídos a esta tarefa."
+        );
+    }
+
+    const nomesDestinatarios = (tarefa.assigned || []).join(', ');
+
+    const assunto =
+        `Tarefa atribuída - ${item.obrNom}`;
+
+    const corpo =
+        `Exmo.(a) Sr.(a) ${nomesDestinatarios},\n\n` +
+
+        `Espero que se encontre bem.\n\n` +
+
+        `Venho, por este meio, informar que lhe foi atribuída a seguinte tarefa:\n\n` +
+
+        `Obra: ${item.obrNom}\n` +
+
+        `Tarefa: ${tarefa.txt}\n` +
+
+        `Estado: ${tarefa.est}\n\n` +
+
+        `Agradecia, por favor, que procedesse à realização da tarefa acima indicada, ` +
+        `com a maior brevidade possível, e que nos desse conhecimento assim que a mesma se encontre concluída.\n\n` +
+
+        `Muito obrigado pela atenção e colaboração.\n\n` +
+
+        `Com os melhores cumprimentos,\n` +
+
+        `${user.n || user.u}`;
+
+    const mailto =
+        `mailto:${destinatarios.join(';')}` +
+        `?subject=${encodeURIComponent(assunto)}` +
+        `&body=${encodeURIComponent(corpo)}`;
+
+    window.location.href = mailto;
+}
+
 function addTarRow(val = {
     txt: '',
     assigned: [],
@@ -3139,6 +3214,14 @@ function renderTar() {
                             style="padding:4px 7px; border:none; border-radius:4px; background:#e2e8f0; cursor:pointer;">
                             ✏️
                         </button>
+
+                        <button
+                            type="button"
+                            onclick="criarEmailTarefa('${t.id}', ${taskIdx})"
+                            title="Criar e-mail Outlook"
+                            style="padding:4px 7px; margin-left:3px; border:none; border-radius:4px; background:#dbeafe; color:#1d4ed8; cursor:pointer;">
+                            ✉️
+                        </button>
                     </td>
                 </tr>
             `;
@@ -3239,6 +3322,7 @@ function renderUsers() {
                 <div class="card-grid">
                     <div><b>Utilizador:</b> ${u.u}</div>
                     <div><b>Senha:</b> ${u.p}</div>
+                    <div><b>E-mail:</b> ${u.email || 'Não definido'}</div>
                     <div><b>Perfil:</b> ${u.role}</div>
                     <div><b>Estado:</b> ${u.st}</div>
                 </div>
@@ -3340,6 +3424,7 @@ function prepEdit(mod, id) {
     } else if(mod === 'users') {
         document.getElementById('u-nom').value = item.u;
         document.getElementById('u-pwd').value = item.p;
+        document.getElementById('u-email').value = item.email || '';
         document.getElementById('u-rol').value = item.role;
 		document.getElementById('u-est').value = item.st;
     } else if(mod === 'forn') {
