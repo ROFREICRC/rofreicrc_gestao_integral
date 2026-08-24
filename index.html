@@ -5401,6 +5401,8 @@ async function criarEmailConsulta(id, fornecedorIdx) {
                     <th style="border:1px solid #cbd5e1; padding:6px; text-align:left; background:#f1f5f9;">Qtd</th>
                     <th style="border:1px solid #cbd5e1; padding:6px; text-align:left; background:#f1f5f9;">Unid.</th>
                     <th style="border:1px solid #cbd5e1; padding:6px; text-align:left; background:#f1f5f9;">Produto / Material</th>
+                    <th style="border:1px solid #cbd5e1; padding:6px; text-align:right; background:#f1f5f9;">Preço Un.</th>
+                    <th style="border:1px solid #cbd5e1; padding:6px; text-align:right; background:#f1f5f9;">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -5411,11 +5413,13 @@ async function criarEmailConsulta(id, fornecedorIdx) {
                             <td style="border:1px solid #cbd5e1; padding:6px;">${item.q || ''}</td>
                             <td style="border:1px solid #cbd5e1; padding:6px;">${item.u || ''}</td>
                             <td style="border:1px solid #cbd5e1; padding:6px;">${item.p || ''}</td>
+                            <td style="border:1px solid #cbd5e1; padding:6px; text-align:right;"></td>
+                            <td style="border:1px solid #cbd5e1; padding:6px; text-align:right;"></td>
                         </tr>
                     `).join('')
                     : `
                         <tr>
-                            <td colspan="3" style="border:1px solid #cbd5e1; padding:6px;">
+                            <td colspan="5" style="border:1px solid #cbd5e1; padding:6px;">
                                 Não existem materiais selecionados para esta Consulta.
                             </td>
                         </tr>
