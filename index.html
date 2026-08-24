@@ -790,6 +790,7 @@ let editingId = null;
 let activeNotaId = null; 
 let activeFileId = null;
 let massMode = false;
+let consultaGestaoAbertaId = null;
 
 // --- LOGIN Y SEGURIDAD ---
 async function doLogin() {
@@ -2684,6 +2685,14 @@ function renderConsultas() {
             </div>
         `;
     });
+
+    if(consultaGestaoAbertaId) {
+        const consultaVisivel = data.find(c => c.id === consultaGestaoAbertaId);
+
+        if(consultaVisivel) {
+            setTimeout(() => renderConsultaGestao(consultaGestaoAbertaId), 0);
+        }
+    }
 }
 
 function clearConsultaFilters() {
@@ -3569,9 +3578,11 @@ function toggleConsultaGestao(id) {
 
     if(container.innerHTML.trim()) {
         container.innerHTML = '';
+        consultaGestaoAbertaId = null;
         return;
     }
 
+    consultaGestaoAbertaId = id;
     renderConsultaGestao(id);
 }
 
@@ -3633,7 +3644,7 @@ function renderConsultaGestao(id) {
             </td>
 
             <td>
-                    <select class="consulta-g-est ${getConsultaStatusClass(f.est)}"
+                <select class="consulta-g-est ${getConsultaStatusClass(f.est)}"
                         onchange="consultaEstadoFornecedorAlterado(this)"
                         data-estado-original="${f.est || 'Pendente de solicitar ao fornecedor'}"
                         style="width:100%; min-width:190px;">
@@ -3654,12 +3665,47 @@ function renderConsultaGestao(id) {
                     </option>
                 </select>
             </td>
+
+            <td style="text-align:center;">
+                <button type="button"
+                        onclick="removeConsultaFornecedorGestao('${id}', ${idx})"
+                        style="color:#dc2626; border:none; background:#fef2f2; cursor:pointer; padding:5px 8px; border-radius:4px; font-weight:bold;">
+                    🗑️
+                </button>
+            </td>
         </tr>
     `).join('');
 
-    const comparativoHead = (consulta.fornecedores || []).map(f =>
-        `<th>${f.nome || 'Fornecedor'}</th>`
-    ).join('');
+const comparativoHead = (consulta.fornecedores || []).map((f, fIdx) => {
+
+    const totalFornecedor = (consulta.items || []).reduce((total, item, itemIdx) => {
+        const preco = Number(f.precos?.[itemIdx]) || 0;
+        const qtd = Number(item.q) || 0;
+
+        return total + (qtd * preco);
+    }, 0);
+
+    return `
+        <th style="min-width:170px;">
+            <div style="font-weight:bold;">
+                ${f.nome || 'Fornecedor'}
+            </div>
+
+            <div style="font-size:10px; color:#166534; margin-top:3px;">
+                Total: € ${totalFornecedor.toLocaleString('pt-PT', {
+                    minimumFractionDigits:2,
+                    maximumFractionDigits:2
+                })}
+            </div>
+
+            <button type="button"
+                    onclick="transferirConsultaParaNE('${id}', ${fIdx})"
+                    style="margin-top:5px; padding:4px 7px; font-size:9px; border:none; border-radius:3px; background:#16a34a; color:white; cursor:pointer; font-weight:bold;">
+                ➡️ Criar N.E.
+            </button>
+        </th>
+    `;
+}).join('');
 
     const comparativoBody = (consulta.items || []).map((item, itemIdx) => {
 
@@ -3783,6 +3829,12 @@ function renderConsultaGestao(id) {
 
             <h4>🏢 Controlo da gestão das consultas</h4>
 
+            <button type="button"
+                    onclick="addConsultaFornecedorGestao('${id}')"
+                    style="margin-bottom:10px; padding:6px 10px; cursor:pointer; background:var(--s); color:white; border:none; border-radius:3px;">
+                + Adicionar Fornecedor
+            </button>
+
             <table class="ne-table">
                 <thead>
                             <tr>
@@ -3842,6 +3894,243 @@ function renderConsultaGestao(id) {
     `;
 }
 
+async function transferirConsultaParaNE(id, fornecedorIdx) {
+
+    const consulta = DB.consultas.find(c => c.id === id);
+
+    if(!consulta) return;
+
+    await saveConsultaGestao(id, true);
+
+    const consultaAtualizada = DB.consultas.find(c => c.id === id);
+
+    if(!consultaAtualizada) return;
+
+    const fornecedor = consultaAtualizada.fornecedores?.[fornecedorIdx];
+
+    if(!fornecedor) {
+        return alert("Fornecedor não encontrado.");
+    }
+
+    const materiaisSelecionados = [];
+
+    for(let itemIdx = 0; itemIdx < (consultaAtualizada.items || []).length; itemIdx++) {
+
+        const item = consultaAtualizada.items[itemIdx];
+
+        const incluirPDF =
+            fornecedor.incluirPDF?.[itemIdx] !== false;
+
+        if(incluirPDF) {
+
+            materiaisSelecionados.push({
+                ...item,
+                precoFornecedor: fornecedor.precos?.[itemIdx] || ''
+            });
+
+        } else {
+
+            const transferir = confirm(
+                `O material "${item.p}" não está marcado como "Incluir no PDF".\n\n` +
+                `Deseja mesmo assim transferi-lo para a N.E. deste fornecedor?`
+            );
+
+            if(transferir) {
+
+                materiaisSelecionados.push({
+                    ...item,
+                    precoFornecedor: fornecedor.precos?.[itemIdx] || ''
+                });
+
+            }
+        }
+    }
+
+    if(materiaisSelecionados.length === 0) {
+        return alert("Nenhum material foi selecionado para a N.E.");
+    }
+
+    prepararFormularioNEDesdeConsulta(
+        consultaAtualizada,
+        fornecedor,
+        materiaisSelecionados
+    );
+
+    alert(
+        `Informação preparada para criar a N.E. do fornecedor "${fornecedor.nome}".`
+    );
+
+    showMod('ne');
+}
+
+
+function prepararFormularioNEDesdeConsulta(consulta, fornecedor, materiais) {
+
+    editingId = null;
+
+    document.getElementById('ne-num').value = '';
+
+    autoNumNE();
+
+    const obraSelect = document.getElementById('ne-obr');
+
+    if(obraSelect) {
+        obraSelect.value = consulta.obrId;
+    }
+
+    document.getElementById('ne-prov').value = fornecedor.nome || '';
+
+    autoFillNEForn();
+
+    document.getElementById('ne-est').value = 'Por Solicitar';
+
+    document.getElementById('ne-cond').value =
+        `Consulta: ${consulta.num}${consulta.descricao ? ' | ' + consulta.descricao : ''}`;
+
+    const tbody = document.getElementById('ne-body');
+
+    tbody.innerHTML = '';
+
+    materiais.forEach(item => {
+
+        addNERow({
+            q: item.q || '',
+            u: item.u || '',
+            p: item.p || '',
+            pr: item.precoFornecedor || '',
+            t: (
+                Number(item.q || 0) *
+                Number(item.precoFornecedor || 0)
+            ).toFixed(2)
+        });
+    });
+
+    updateNEGrandTotal();
+
+    document.getElementById('ne-cancel').style.display = 'block';
+}
+
+
+	
+function addConsultaFornecedorGestao(id) {
+    const consulta = DB.consultas.find(c => c.id === id);
+
+    if(!consulta) return;
+
+    const container = document.getElementById(`consulta-gestao-${id}`);
+
+    if(!container) return;
+
+    const nomeEl = container.querySelectorAll('.consulta-g-forn');
+
+    for(const input of nomeEl) {
+        if(!input.value.trim()) {
+            input.focus();
+            return alert("Preencha o fornecedor vazio antes de adicionar outro.");
+        }
+    }
+
+    const fornecedorDisponivel = DB.forn.find(f =>
+        !(consulta.fornecedores || []).some(existing =>
+            (existing.fornecedorId && existing.fornecedorId === f.id) ||
+            (existing.nome || '').toLowerCase() === (f.nome || '').toLowerCase()
+        )
+    );
+
+    if(!fornecedorDisponivel) {
+        return alert("Não existem mais fornecedores disponíveis na base de dados.");
+    }
+
+    saveConsultaGestao(id, true).then(() => {
+
+        const consultaAtualizada = DB.consultas.find(c => c.id === id);
+
+        consultaAtualizada.fornecedores.push({
+            nome: fornecedorDisponivel.nome,
+            fornecedorId: fornecedorDisponivel.id,
+            d_envio: '',
+            d_resposta: '',
+            obs: '',
+            est: 'Pendente de solicitar ao fornecedor',
+            precos: {},
+            incluirPDF: {}
+        });
+
+        db.ref(`consultas/${id}`).set(consultaAtualizada).then(() => {
+
+            const idx = DB.consultas.findIndex(c => c.id === id);
+
+            if(idx >= 0) {
+                DB.consultas[idx] = JSON.parse(JSON.stringify(consultaAtualizada));
+            }
+
+            consultaGestaoAbertaId = id;
+
+            renderConsultas();
+            renderConsultaGestao(id);
+        });
+    });
+}
+
+async function removeConsultaFornecedorGestao(id, fornecedorIdx) {
+    const consulta = DB.consultas.find(c => c.id === id);
+
+    if(!consulta) return;
+
+    const fornecedor = consulta.fornecedores?.[fornecedorIdx];
+
+    if(!fornecedor) return;
+
+    if(!confirm(`Deseja eliminar o fornecedor "${fornecedor.nome}" desta Consulta?`)) {
+        return;
+    }
+
+    await saveConsultaGestao(id, true);
+
+    const consultaAtualizada = DB.consultas.find(c => c.id === id);
+
+    if(!consultaAtualizada) return;
+
+    consultaAtualizada.fornecedores.splice(fornecedorIdx, 1);
+
+    Object.values(consultaAtualizada.adjudicacoes || {}).forEach((valor, itemIdx) => {
+        if(valor === fornecedorIdx) {
+            delete consultaAtualizada.adjudicacoes[itemIdx];
+        } else if(valor > fornecedorIdx) {
+            consultaAtualizada.adjudicacoes[itemIdx] = valor - 1;
+        }
+    });
+
+    consultaAtualizada.fornecedores.forEach(f => {
+        const novosPrecos = {};
+        const novoIncluirPDF = {};
+
+        Object.keys(f.precos || {}).forEach(itemIdx => {
+            novosPrecos[itemIdx] = f.precos[itemIdx];
+        });
+
+        Object.keys(f.incluirPDF || {}).forEach(itemIdx => {
+            novoIncluirPDF[itemIdx] = f.incluirPDF[itemIdx];
+        });
+
+        f.precos = novosPrecos;
+        f.incluirPDF = novoIncluirPDF;
+    });
+
+    await db.ref(`consultas/${id}`).set(consultaAtualizada);
+
+    const localIndex = DB.consultas.findIndex(c => c.id === id);
+
+    if(localIndex >= 0) {
+        DB.consultas[localIndex] = JSON.parse(JSON.stringify(consultaAtualizada));
+    }
+
+    consultaGestaoAbertaId = id;
+
+    renderConsultas();
+    renderConsultaGestao(id);
+}
+	
 function addConsultaMaterialGestao(id) {
     const container = document.getElementById(`consulta-gestao-${id}`);
     const consulta = DB.consultas.find(c => c.id === id);
@@ -4105,6 +4394,8 @@ async function saveConsultaGestao(id) {
     }
 
     alert("Consulta atualizada com sucesso!");
+
+    consultaGestaoAbertaId = id;
 
     renderConsultas();
     renderConsultaGestao(id);
