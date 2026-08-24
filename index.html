@@ -1906,7 +1906,195 @@ async function saveConsulta(isDraft = false) {
     renderConsultas();
 }
 
-async function saveNE(isDraft = false) {
+function getNEPDFAtiva(ne) {
+    if(!ne || !Array.isArray(ne.files)) return null;
+
+    const pdfs = ne.files.filter(f =>
+        f &&
+        f.n &&
+        /\.pdf$/i.test(f.n) &&
+        f.d
+    );
+
+    if(!pdfs.length) return null;
+
+    return pdfs[pdfs.length - 1];
+}
+
+function downloadNEPDFAtiva(id) {
+    const ne = DB.ne.find(n => n.id === id);
+
+    if(!ne) {
+        return alert("Nota de Encomenda não encontrada.");
+    }
+
+    const pdfFile = getNEPDFAtiva(ne);
+
+    if(!pdfFile) {
+        return alert("Não existe um PDF emitido para esta Nota de Encomenda.");
+    }
+
+    const pdfBase64 = dataUriToBase64(pdfFile.d);
+
+    const byteString = atob(pdfBase64);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+
+    for(let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+    }
+
+    const blob = new Blob([ab], {
+        type: 'application/pdf'
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+
+    a.href = url;
+    a.download = pdfFile.n;
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function criarEmailNE(id) {
+
+    const ne = DB.ne.find(n => n.id === id);
+
+    if(!ne) {
+        return alert("Nota de Encomenda não encontrada.");
+    }
+
+    const pdfFile = getNEPDFAtiva(ne);
+
+    if(!pdfFile) {
+        return alert("Esta Nota de Encomenda ainda não possui uma versão PDF emitida.");
+    }
+
+    const emailFornecedor = ne.email || '';
+
+    if(!emailFornecedor) {
+        const fData = DB.forn.find(f =>
+            f.id === ne.fornId ||
+            (f.nome || '').toLowerCase() === (ne.prov || '').toLowerCase()
+        );
+
+        if(fData?.email) {
+            ne.email = fData.email;
+        }
+    }
+
+    const destino = ne.email || '';
+
+    if(!destino) {
+        return alert(`O fornecedor "${ne.prov}" não tem um endereço de e-mail registado.`);
+    }
+
+    const items = ne.items || [];
+
+    const totalSoma = items.reduce(
+        (acc, item) => acc + Number(item.t || 0),
+        0
+    );
+
+    const tabelaMateriais = `
+        <table style="border-collapse:collapse; width:100%; font-family:Segoe UI,Arial,sans-serif; font-size:11px;">
+            <thead>
+                <tr>
+                    <th style="border:1px solid #cbd5e1; padding:6px; text-align:left; background:#f1f5f9;">Qtd</th>
+                    <th style="border:1px solid #cbd5e1; padding:6px; text-align:left; background:#f1f5f9;">Unid.</th>
+                    <th style="border:1px solid #cbd5e1; padding:6px; text-align:left; background:#f1f5f9;">Produto / Material</th>
+                    <th style="border:1px solid #cbd5e1; padding:6px; text-align:right; background:#f1f5f9;">Preço Un.</th>
+                    <th style="border:1px solid #cbd5e1; padding:6px; text-align:right; background:#f1f5f9;">Total</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                ${
+                    items.map(item => `
+                        <tr>
+                            <td style="border:1px solid #cbd5e1; padding:6px;">
+                                ${Number(item.q || 0).toFixed(2).replace('.', ',')}
+                            </td>
+                            <td style="border:1px solid #cbd5e1; padding:6px;">
+                                ${item.u || ''}
+                            </td>
+                            <td style="border:1px solid #cbd5e1; padding:6px;">
+                                ${item.p || ''}
+                            </td>
+                            <td style="border:1px solid #cbd5e1; padding:6px; text-align:right;">
+                                € ${Number(item.pr || 0).toFixed(2).replace('.', ',')}
+                            </td>
+                            <td style="border:1px solid #cbd5e1; padding:6px; text-align:right;">
+                                € ${Number(item.t || 0).toFixed(2).replace('.', ',')}
+                            </td>
+                        </tr>
+                    `).join('')
+                }
+            </tbody>
+        </table>
+    `;
+
+    const corpo = `
+        <div style="font-family:Segoe UI,Arial,sans-serif; font-size:12px; color:#1e293b;">
+
+            <p>Exmo.(a) Sr.(a),</p>
+
+            <p>Espero que se encontre bem.</p>
+
+            <p>
+                Vimos, por este meio, enviar a Nota de Encomenda abaixo indicada.
+            </p>
+
+            <p>
+                <b>Nº Encomenda:</b> ${ne.num}.V${ne.version || 0}<br>
+                <b>Obra:</b> ${ne.obrNom}<br>
+                <b>Fornecedor:</b> ${ne.prov}
+            </p>
+
+            <p><b>Materiais solicitados:</b></p>
+
+            ${tabelaMateriais}
+
+            <p style="margin-top:12px; text-align:right;">
+                <b>TOTAL: € ${totalSoma.toLocaleString('pt-PT', {
+                    minimumFractionDigits:2,
+                    maximumFractionDigits:2
+                })}</b>
+            </p>
+
+            <p>
+                Aos valores indicados deve-se acrescentar o IVA à taxa em vigor.
+            </p>
+
+            <p>
+                <b>Observações:</b><br>
+                ${(ne.cond || ne.notas || '---').replace(/\n/g, '<br>')}
+            </p>
+
+            <p>
+                Agradecemos a vossa atenção e solicitamos a confirmação da receção
+                desta Nota de Encomenda.
+            </p>
+
+            <p>
+                Muito obrigado.
+            </p>
+        </div>
+    `;
+
+    criarRascunhoOutlookComPDF(
+        destino,
+        `Nota de Encomenda ${ne.num}.V${ne.version || 0}`,
+        corpo,
+        pdfFile.d,
+        pdfFile.n
+    );
+}
     const id = editingId || `NE_${Date.now()}`;
     let num = document.getElementById('ne-num').value;
     const obrSel = document.getElementById('ne-obr');
@@ -2987,7 +3175,23 @@ function renderNE() {
                             💾 Gravar
                         </button>
                     </div>
-                    <div><b>Itens:</b> ${n.items ? n.items.length : 0}</div>
+                    <div>
+                        <b>Itens:</b> ${n.items ? n.items.length : 0}
+
+                        <button type="button"
+                                onclick="downloadNEPDFAtiva('${n.id}')"
+                                title="Descarregar PDF da versão ativa"
+                                style="border:none; background:none; cursor:pointer; font-size:16px; margin-left:6px;">
+                            📄
+                        </button>
+
+                        <button type="button"
+                                onclick="criarEmailNE('${n.id}')"
+                                title="Criar e-mail Outlook"
+                                style="border:none; background:none; cursor:pointer; font-size:16px; margin-left:3px;">
+                            ✉️
+                        </button>
+                    </div>
                 </div>
                 ${getCardButtons('ne', n)}
             </div>`;
@@ -4174,6 +4378,12 @@ function renderConsultaGestao(id) {
         			style="border:none; background:none; cursor:pointer; font-size:18px;">
     			📄
 			</button>
+
+            <button onclick="criarEmailConsulta('${id}', ${idx})"
+                    title="Criar e-mail Outlook"
+                    style="border:none; background:none; cursor:pointer; font-size:18px; margin-left:4px;">
+                ✉️
+            </button>
             </td>
 
             <td>
@@ -5069,12 +5279,197 @@ function fecharConsultaGestao(id) {
     consultaGestaoAlterada = false;
 }
 
+function mimeHeaderEncode(text) {
+    return `=?UTF-8?B?${btoa(unescape(encodeURIComponent(text)))}?=`;
+}
+
+function base64LineBreaks(base64) {
+    return base64.match(/.{1,76}/g)?.join('\r\n') || '';
+}
+
+function dataUriToBase64(dataUri) {
+    if(!dataUri) return '';
+    return dataUri.includes(',')
+        ? dataUri.split(',')[1]
+        : dataUri;
+}
+
+function criarRascunhoOutlookComPDF(to, subject, htmlBody, pdfDataUri, pdfFileName) {
+
+    const pdfBase64 = dataUriToBase64(pdfDataUri);
+
+    if(!pdfBase64) {
+        return alert("Não foi possível preparar o ficheiro PDF para o e-mail.");
+    }
+
+    const boundary = `----=_NextPart_${Date.now()}`;
+
+    const eml =
+        `From: \r\n` +
+        `To: ${to}\r\n` +
+        `Subject: ${mimeHeaderEncode(subject)}\r\n` +
+        `MIME-Version: 1.0\r\n` +
+        `Content-Type: multipart/mixed; boundary="${boundary}"\r\n` +
+        `\r\n` +
+
+        `--${boundary}\r\n` +
+        `Content-Type: text/html; charset="utf-8"\r\n` +
+        `Content-Transfer-Encoding: 8bit\r\n` +
+        `\r\n` +
+        `${htmlBody}\r\n` +
+        `\r\n` +
+
+        `--${boundary}\r\n` +
+        `Content-Type: application/pdf; name="${pdfFileName}"\r\n` +
+        `Content-Transfer-Encoding: base64\r\n` +
+        `Content-Disposition: attachment; filename="${pdfFileName}"\r\n` +
+        `\r\n` +
+        `${base64LineBreaks(pdfBase64)}\r\n` +
+        `\r\n` +
+
+        `--${boundary}--`;
+
+    const blob = new Blob([eml], {
+        type: 'message/rfc822'
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+
+    a.href = url;
+    a.download = `${subject.replace(/[\\/:*?"<>|]/g, '_')}.eml`;
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 async function prepararEGerarPDFConsulta(id, fornecedorIdx) {
     await saveConsultaGestao(id, true);
     gerarPDFConsulta(id, fornecedorIdx);
 }
 
-function gerarPDFConsulta(id, fornecedorIdx) {
+async function criarEmailConsulta(id, fornecedorIdx) {
+    await saveConsultaGestao(id, true);
+
+    const consulta = DB.consultas.find(c => c.id === id);
+
+    if(!consulta) {
+        return alert("Consulta não encontrada.");
+    }
+
+    const fornecedor = consulta.fornecedores?.[fornecedorIdx];
+
+    if(!fornecedor) {
+        return alert("Fornecedor não encontrado.");
+    }
+
+    const fData = DB.forn.find(f =>
+        f.id === fornecedor.fornecedorId ||
+        (f.nome || '').toLowerCase() === (fornecedor.nome || '').toLowerCase()
+    );
+
+    const emailFornecedor = fData?.email || '';
+
+    if(!emailFornecedor) {
+        return alert(`O fornecedor "${fornecedor.nome}" não tem um endereço de e-mail registado.`);
+    }
+
+    const pdfDataUri = gerarPDFConsulta(id, fornecedorIdx, true);
+
+    if(!pdfDataUri) {
+        return alert("Não foi possível gerar o PDF da Consulta.");
+    }
+
+    const materiais = (consulta.items || [])
+        .map((item, itemIdx) => ({
+            item,
+            itemIdx
+        }))
+        .filter(({itemIdx}) =>
+            fornecedor.incluirPDF?.[itemIdx] !== false
+        );
+
+    let tabelaMateriais = `
+        <table style="border-collapse:collapse; width:100%; font-family:Segoe UI,Arial,sans-serif; font-size:11px;">
+            <thead>
+                <tr>
+                    <th style="border:1px solid #cbd5e1; padding:6px; text-align:left; background:#f1f5f9;">Qtd</th>
+                    <th style="border:1px solid #cbd5e1; padding:6px; text-align:left; background:#f1f5f9;">Unid.</th>
+                    <th style="border:1px solid #cbd5e1; padding:6px; text-align:left; background:#f1f5f9;">Produto / Material</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${
+                    materiais.length
+                    ? materiais.map(({item}) => `
+                        <tr>
+                            <td style="border:1px solid #cbd5e1; padding:6px;">${item.q || ''}</td>
+                            <td style="border:1px solid #cbd5e1; padding:6px;">${item.u || ''}</td>
+                            <td style="border:1px solid #cbd5e1; padding:6px;">${item.p || ''}</td>
+                        </tr>
+                    `).join('')
+                    : `
+                        <tr>
+                            <td colspan="3" style="border:1px solid #cbd5e1; padding:6px;">
+                                Não existem materiais selecionados para esta Consulta.
+                            </td>
+                        </tr>
+                    `
+                }
+            </tbody>
+        </table>
+    `;
+
+    const corpo = `
+        <div style="font-family:Segoe UI,Arial,sans-serif; font-size:12px; color:#1e293b;">
+            <p>Exmo.(a) Sr.(a),</p>
+
+            <p>Espero que se encontre bem.</p>
+
+            <p>
+                Vimos, por este meio, solicitar a vossa melhor proposta relativamente
+                aos materiais indicados abaixo.
+            </p>
+
+            <p>
+                <b>Nº Consulta:</b> ${consulta.num}<br>
+                <b>Obra:</b> ${consulta.obrNom}<br>
+                <b>Descrição:</b> ${consulta.descricao || '---'}
+            </p>
+
+            <p><b>Materiais a consultar:</b></p>
+
+            ${tabelaMateriais}
+
+            <p style="margin-top:15px;">
+                <b>Observações:</b><br>
+                ${(consulta.observacoes || '---').replace(/\n/g, '<br>')}
+            </p>
+
+            <p>
+                Agradecemos, desde já, a vossa atenção e aguardamos a vossa melhor
+                proposta.
+            </p>
+
+            <p>
+                Com os melhores cumprimentos,
+            </p>
+        </div>
+    `;
+
+    criarRascunhoOutlookComPDF(
+        emailFornecedor,
+        `Consulta ${consulta.num} - ${consulta.obrNom}`,
+        corpo,
+        pdfDataUri,
+        `${consulta.num}.${fornecedor.nome}.pdf`
+    );
+}
+
+function gerarPDFConsulta(id, fornecedorIdx, apenasRetornar = false) {
     const consulta = DB.consultas.find(c => c.id === id);
 
     if(!consulta) return;
@@ -5241,9 +5636,15 @@ function gerarPDFConsulta(id, fornecedorIdx) {
         );
     }
 
-    doc.save(
-        `${consulta.num}.${fornecedor.nome}.pdf`
-    );
+    const pdfDataUri = doc.output('datauristring');
+
+    if(!apenasRetornar) {
+        doc.save(
+            `${consulta.num}.${fornecedor.nome}.pdf`
+        );
+    }
+
+    return pdfDataUri;
 }
 
 	
