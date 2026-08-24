@@ -2102,8 +2102,8 @@ function consultaEstadoFornecedorAlterado(selectEl) {
     const row = selectEl.closest('tr');
     if(!row) return;
 
-    const envio = row.querySelector('.consulta-d-envio');
-    const resposta = row.querySelector('.consulta-d-resposta');
+    const envio = row.querySelector('.consulta-d-envio, .consulta-g-envio');
+    const resposta = row.querySelector('.consulta-d-resposta, .consulta-g-resposta');
 
     const estadoAnterior = selectEl.dataset.estadoOriginal || 'Pendente de solicitar ao fornecedor';
     const novoEstado = selectEl.value;
@@ -3903,7 +3903,8 @@ function addConsultaMaterialGestao(id) {
         ${preços}
 
         <td>
-            <select class="consulta-adjudicado" data-iidx="${itemIdx}">
+                <select class="consulta-adjudicado"
+                            data-iidx="${itemIdx}">
                 <option value="">-- Selecionar --</option>
                 ${adjudicacaoOptions}
             </select>
@@ -3951,7 +3952,6 @@ async function saveConsultaGestao(id) {
     if(!container) return;
 
     const now = new Date().toLocaleString();
-
     const old = JSON.parse(JSON.stringify(consulta));
 
     const obrEl = container.querySelector('.consulta-g-obr');
@@ -3973,7 +3973,7 @@ async function saveConsultaGestao(id) {
 
         const fornecedorOriginal = consulta.fornecedores?.[fIdx] || {};
 
-        const fornecedor = DB.forn.find(f =>
+        const fornecedorDB = DB.forn.find(f =>
             (f.nome || '').toLowerCase() === nome.toLowerCase()
         );
 
@@ -3985,45 +3985,31 @@ async function saveConsultaGestao(id) {
         fornecedores.push({
             ...fornecedorOriginal,
             nome,
-            fornecedorId: fornecedor ? fornecedor.id : (fornecedorOriginal.fornecedorId || null),
+            fornecedorId: fornecedorDB
+                ? fornecedorDB.id
+                : (fornecedorOriginal.fornecedorId || null),
+
             d_envio: envioEl?.value || fornecedorOriginal.d_envio || '',
             d_resposta: respostaEl?.value || fornecedorOriginal.d_resposta || '',
             obs: obsEl?.value || '',
             est: estadoEl?.value || fornecedorOriginal.est || 'Pendente de solicitar ao fornecedor',
-            precos: {}
+
+            precos: {},
+            incluirPDF: {}
         });
-    });
-
-    fornecedores.forEach(f => {
-        if(f.est === 'Enviada ao fornecedor' && !f.d_envio) {
-            f.d_envio = now;
-        }
-
-        if(f.est === 'Entregue pelo fornecedor' && !f.d_resposta) {
-            f.d_resposta = now;
-        }
     });
 
     const items = [];
 
-    container.querySelectorAll('.consulta-comparativo tbody tr').forEach((tr, itemIdx) => {
+    const materialRows = container.querySelectorAll('.consulta-comparativo tbody tr');
+
+    materialRows.forEach((tr, itemIdx) => {
 
         const q = tr.querySelector('.consulta-g-q')?.value || '';
         const u = tr.querySelector('.consulta-g-u')?.value || '';
         const p = tr.querySelector('.consulta-g-p')?.value || '';
 
         if(!q || !p) return;
-
-        const precos = {};
-
-        tr.querySelectorAll('.consulta-preco').forEach(input => {
-            const fIdx = input.dataset.fidx;
-            const valor = input.value;
-
-            if(valor !== '') {
-                precos[fIdx] = valor;
-            }
-        });
 
         items.push({
             q,
@@ -4033,33 +4019,59 @@ async function saveConsultaGestao(id) {
             t: ''
         });
 
-        consulta.fornecedores.forEach((fornecedor, fIdx) => {
-            if(!fornecedor.precos) fornecedor.precos = {};
-            if(precos[fIdx] !== undefined) {
-                fornecedor.precos[itemIdx] = precos[fIdx];
+        tr.querySelectorAll('.consulta-preco').forEach(input => {
+            const fIdx = Number(input.dataset.fidx);
+            const valor = input.value;
+
+            if(!fornecedores[fIdx]) return;
+
+            if(valor !== '') {
+                fornecedores[fIdx].precos[itemIdx] = valor;
             }
+        });
+
+        tr.querySelectorAll('.consulta-incluir-pdf').forEach(input => {
+            const fIdx = Number(input.dataset.fidx);
+
+            if(!fornecedores[fIdx]) return;
+
+            fornecedores[fIdx].incluirPDF[itemIdx] = input.checked;
         });
     });
 
     const adjudicacoes = {};
 
     container.querySelectorAll('.consulta-adjudicado').forEach(select => {
+        const itemIdx = select.dataset.iidx;
+
         if(select.value !== '') {
-            adjudicacoes[select.dataset.iidx] = Number(select.value);
+            adjudicacoes[itemIdx] = Number(select.value);
         }
     });
 
     const data = {
         ...consulta,
-        obrId: obrEl ? obrEl.value : consulta.obrId,
+
+        obrId: obrEl
+            ? obrEl.value
+            : consulta.obrId,
+
         obrNom: obrEl
-            ? obrEl.options[obrEl.selectedIndex].text
+            ? (obrEl.options[obrEl.selectedIndex]?.text || consulta.obrNom)
             : consulta.obrNom,
-        descricao: descEl ? descEl.value.trim() : consulta.descricao,
-        observacoes: obsGeralEl ? obsGeralEl.value.trim() : (consulta.observacoes || ''),
+
+        descricao: descEl
+            ? descEl.value.trim()
+            : consulta.descricao,
+
+        observacoes: obsGeralEl
+            ? obsGeralEl.value.trim()
+            : (consulta.observacoes || ''),
+
         fornecedores,
         items,
         adjudicacoes,
+
         u_edit: user.u || user.n,
         d_edit: now
     };
@@ -4081,6 +4093,16 @@ async function saveConsultaGestao(id) {
         'consultas',
         `[CONSULTA - Alterada] Nº: ${data.num} | Obra: ${data.obrNom}`
     );
+
+    // Atualiza a memória local antes de voltar a renderizar.
+    // Isto evita que a interface recupere os valores antigos de DB.consultas.
+    const localIndex = DB.consultas.findIndex(c => c.id === id);
+
+    if(localIndex >= 0) {
+        DB.consultas[localIndex] = JSON.parse(JSON.stringify(data));
+    } else {
+        DB.consultas.push(JSON.parse(JSON.stringify(data)));
+    }
 
     alert("Consulta atualizada com sucesso!");
 
