@@ -2087,7 +2087,7 @@ async function criarEmailNE(id) {
         </div>
     `;
 
-    criarRascunhoOutlookComPDF(
+	criarRascunhoOutlookComPDF(
         destino,
         `Nota de Encomenda ${ne.num}.V${ne.version || 0}`,
         corpo,
@@ -2095,6 +2095,8 @@ async function criarEmailNE(id) {
         pdfFile.n
     );
 }
+
+async function saveNE(isDraft = false) {
     const id = editingId || `NE_${Date.now()}`;
     let num = document.getElementById('ne-num').value;
     const obrSel = document.getElementById('ne-obr');
