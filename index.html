@@ -961,9 +961,70 @@ function sync() {
 }
 	
 	
-function abrirNAS() {
-    const rutaNAS = 'file://192.168.2.201/Rofrei-NAS/';
-    window.open(rutaNAS, '_blank');
+async function abrirNAS() {
+
+    const lista = document.getElementById('nas-lista');
+
+    lista.innerHTML = `
+        <div style="padding:15px;">
+            ⏳ Leyendo carpetas del NAS...
+        </div>
+    `;
+
+    try {
+
+        const response = await fetch(
+            'http://127.0.0.1:3000/nas'
+        );
+
+        const data = await response.json();
+
+        if (!data.success) {
+
+            lista.innerHTML = `
+                <div style="padding:15px; color:red;">
+                    ❌ Error: ${data.error}
+                </div>
+            `;
+
+            return;
+        }
+
+        if (!data.folders || data.folders.length === 0) {
+
+            lista.innerHTML = `
+                <div style="padding:15px;">
+                    No se encontraron carpetas.
+                </div>
+            `;
+
+            return;
+        }
+
+        lista.innerHTML = data.folders.map(folder => `
+            <div style="
+                padding:10px;
+                margin-bottom:5px;
+                border:1px solid #ddd;
+                border-radius:5px;
+                cursor:pointer;
+            ">
+                📁 ${folder}
+            </div>
+        `).join('');
+
+    } catch (error) {
+
+        console.error(error);
+
+        lista.innerHTML = `
+            <div style="padding:15px; color:red;">
+                ❌ No se pudo conectar con el servicio NAS local.
+            </div>
+        `;
+
+    }
+
 }
 
 function showMod(mod) {
