@@ -961,20 +961,24 @@ function sync() {
 }
 	
 	
-async function abrirNAS() {
+let nasCurrentPath = '';
+
+async function abrirNAS(ruta = '') {
+
+    nasCurrentPath = ruta;
 
     const lista = document.getElementById('nas-lista');
 
     lista.innerHTML = `
         <div style="padding:15px;">
-            ⏳ Leyendo carpetas del NAS...
+            ⏳ Leyendo contenido del NAS...
         </div>
     `;
 
     try {
 
         const response = await fetch(
-            'http://127.0.0.1:3000/nas'
+            `http://127.0.0.1:3000/nas?path=${encodeURIComponent(ruta)}`
         );
 
         const data = await response.json();
@@ -990,28 +994,64 @@ async function abrirNAS() {
             return;
         }
 
+        let html = '';
+
+        if (ruta) {
+
+            const parentPath = ruta
+                .split(/[\\/]/)
+                .filter(Boolean)
+                .slice(0, -1)
+                .join('\\');
+
+            html += `
+                <button
+                    onclick="abrirNAS('${parentPath.replace(/\\/g, '\\\\')}')"
+                    style="
+                        margin-bottom:15px;
+                        padding:8px 12px;
+                        cursor:pointer;
+                    ">
+                    ⬅️ Volver
+                </button>
+            `;
+        }
+
         if (!data.folders || data.folders.length === 0) {
 
-            lista.innerHTML = `
+            html += `
                 <div style="padding:15px;">
                     No se encontraron carpetas.
                 </div>
             `;
 
-            return;
+        } else {
+
+            html += data.folders.map(folder => {
+
+                const nuevaRuta = ruta
+                    ? `${ruta}\\${folder}`
+                    : folder;
+
+                return `
+                    <div
+                        onclick="abrirNAS('${nuevaRuta.replace(/\\/g, '\\\\')}')"
+                        style="
+                            padding:10px;
+                            margin-bottom:5px;
+                            border:1px solid #ddd;
+                            border-radius:5px;
+                            cursor:pointer;
+                        ">
+                        📁 ${folder}
+                    </div>
+                `;
+
+            }).join('');
+
         }
 
-        lista.innerHTML = data.folders.map(folder => `
-            <div style="
-                padding:10px;
-                margin-bottom:5px;
-                border:1px solid #ddd;
-                border-radius:5px;
-                cursor:pointer;
-            ">
-                📁 ${folder}
-            </div>
-        `).join('');
+        lista.innerHTML = html;
 
     } catch (error) {
 
