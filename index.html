@@ -1877,18 +1877,17 @@ function alternarBarraMenu() {
 function inicializarFormulariosPopup() {
 
     const modulos = [
-        'empresa',
-        'obras',
-        'rend',
-        'horas',
-        'obs',
-        'ne',
-        'consultas',
-        'ped',
-        'tar',
-        'users',
-        'forn'
-    ];
+    'obras',
+    'rend',
+    'horas',
+    'obs',
+    'ne',
+    'consultas',
+    'ped',
+    'tar',
+    'users',
+    'forn'
+];
 
     modulos.forEach(mod => {
 
@@ -4787,7 +4786,10 @@ function cancelarEdit(mod) {
         form.querySelectorAll('input, textarea').forEach(i => { if(i.type !== 'button') i.value = ''; });
         form.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
     }
-    if(document.getElementById(`${pre}-cancel`)) document.getElementById(`${pre}-cancel`).style.display = 'none';
+    if(document.getElementById(`${pre}-cancel`)) {
+        document.getElementById(`${pre}-cancel`).style.display = 'none';
+    }
+
     if(mod === 'ne') {
         document.getElementById('ne-body').innerHTML = '';
         autoNumNE();
@@ -4812,11 +4814,26 @@ function cancelarEdit(mod) {
         document.getElementById('rend-body').innerHTML = '';
         addRendRow();
     }
-    if(mod === 'horas' && document.getElementById('h-est')) {
+        if(mod === 'horas' && document.getElementById('h-est')) {
         document.getElementById('h-est').disabled = true;
     }
 
-    fecharFormularioModulo(mod);
+    const modulosPopup = [
+        'obras',
+        'rend',
+        'horas',
+        'obs',
+        'ne',
+        'consultas',
+        'ped',
+        'tar',
+        'users',
+        'forn'
+    ];
+
+    if(modulosPopup.includes(mod)) {
+        fecharFormularioModulo(mod);
+    }
 }
 
 function getPrefix(mod) {
