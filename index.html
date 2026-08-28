@@ -38,18 +38,22 @@
         }
 
         header {
-            background: linear-gradient(135deg, #dbe7f2, #eaf0f6);
-            color: #334155;
-            padding: 15px 55px 15px 20px;
-            text-align: center;
-            font-weight: bold;
-            font-size: 16px;
-            position: sticky;
-            top: 0;
-            z-index: 200;
-            border-bottom: 1px solid var(--menu-border);
-            box-shadow: 0 3px 12px rgba(71,85,105,0.08);
-        }
+    background: linear-gradient(135deg, #dbe7f2, #eaf0f6);
+    color: #334155;
+    padding: 7px 20px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 8px;
+    min-height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    border-bottom: 1px solid var(--menu-border);
+    box-shadow: 0 3px 12px rgba(71,85,105,0.08);
+}
 
         nav {
             display: flex;
@@ -59,7 +63,7 @@
             padding: 10px;
             gap: 6px;
             position: fixed;
-            top: 49px;
+            top: 36px;
             left: 0;
             bottom: 0;
             z-index: 100;
@@ -154,27 +158,32 @@
             background: #e4edf7;
         }
 
-        #btn-toggle-nav {
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            padding: 7px 11px;
-            border: 1px solid #d5e1ee;
-            border-radius: 8px;
-            background: #edf3f8;
-            color: #475569;
-            cursor: pointer;
-            font-size: 17px;
-            font-weight: bold;
-            transition: all 0.22s ease;
-        }
+#btn-toggle-nav {
+    position: relative;
+    width: 100%;
+    padding: 11px 13px;
+    margin-bottom: 3px;
+    border: 1px solid #d5e1ee;
+    border-radius: 9px;
+    background: #e8f0f7;
+    color: #475569;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: left;
+    transition:
+        background 0.22s ease,
+        color 0.22s ease,
+        transform 0.22s ease,
+        box-shadow 0.22s ease;
+}
 
-        #btn-toggle-nav:hover {
-            background: #dbe7f2;
-            transform: translateY(-50%) scale(1.05);
-            box-shadow: 0 4px 12px rgba(71,85,105,0.12);
-        }
+#btn-toggle-nav:hover {
+    background: #dce9f5;
+    color: #334155;
+    transform: translateX(4px);
+    box-shadow: 0 5px 14px rgba(71,85,105,0.10);
+}
 
         @keyframes menuFadeIn {
             from {
@@ -345,14 +354,6 @@
 <body>
 <header>
     <span>ROFREICRC v1.0 - GESTÃO INTEGRAL</span>
-
-    <button
-        id="btn-toggle-nav"
-        onclick="alternarBarraMenu()"
-        title="Mostrar/Ocultar menu"
-    >
-        ☰
-    </button>
 </header>
 <div id="login-sec" style="max-width: 400px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
     <h2 style="text-align: center; color: var(--p); margin-top:0;">Acesso ao Sistema</h2>
@@ -365,6 +366,15 @@
 
 <div id="app" class="menu-expanded" style="display: none;">
         <nav id="main-nav">
+
+        <button
+            id="btn-toggle-nav"
+            onclick="alternarBarraMenu()"
+            title="Mostrar/Ocultar menu"
+            class="btn-toggle-menu"
+        >
+            👁️ Ocultar menú
+        </button>
 
         <button onclick="showMod('empresa')">
             🏢 EMPRESA
@@ -1712,17 +1722,28 @@ function ocultarMenuGestao() {
 function alternarBarraMenu() {
     const nav = document.getElementById('main-nav');
     const app = document.getElementById('app');
+    const boton = document.getElementById('btn-toggle-nav');
 
-    if (!nav || !app) return;
+    if (!nav || !app || !boton) return;
 
     nav.classList.toggle('nav-hidden');
 
     if (nav.classList.contains('nav-hidden')) {
+
         app.classList.remove('menu-expanded');
         app.classList.add('menu-collapsed');
+
+        boton.innerHTML = '👁️ Mostrar menú';
+        boton.title = 'Mostrar menú';
+
     } else {
+
         app.classList.remove('menu-collapsed');
         app.classList.add('menu-expanded');
+
+        boton.innerHTML = '🙈 Ocultar menú';
+        boton.title = 'Ocultar menú';
+
     }
 }
 
