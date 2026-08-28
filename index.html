@@ -1203,25 +1203,104 @@
                 </section>
 
         <section id="mod-nas" class="mod-sec">
-            <div class="form-box">
-                <h3>📁 Explorador NAS</h3>
 
-                <div style="background:#f8fafc; padding:12px; border:1px solid #cbd5e1; border-radius:6px; margin-bottom:15px;">
-                    <b>Servidor:</b>
-                    <span style="font-family:monospace;">
-                        \\192.168.2.201\Rofrei-NAS
-                    </span>
-                </div>
+    <div class="form-box">
 
-                <button
-                    onclick="abrirNAS()"
-                    style="background:var(--acc); color:white; border:none; padding:10px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">
-                    📂 Abrir Rofrei-NAS
-                </button>
+        <h3>📁 Explorador NAS</h3>
 
-                <div id="nas-lista" style="margin-top:20px;"></div>
+        <div style="
+            background:#f8fafc;
+            padding:12px;
+            border:1px solid #cbd5e1;
+            border-radius:8px;
+            margin-bottom:15px;
+        ">
+            <b>Servidor:</b>
+
+            <span
+                id="nas-ruta-configurada"
+                style="
+                    font-family:monospace;
+                    margin-left:5px;
+                "
+            >
+                Cargando...
+            </span>
+        </div>
+
+        <div
+            id="nas-config-admin"
+            style="
+                display:none;
+                background:#eef4f8;
+                padding:15px;
+                border:1px solid #d5e1ee;
+                border-radius:8px;
+                margin-bottom:15px;
+            "
+        >
+
+            <div
+                style="
+                    font-weight:bold;
+                    margin-bottom:8px;
+                    color:#475569;
+                "
+            >
+                ⚙️ Configuración del servidor NAS
             </div>
-        </section>
+
+            <label>Ruta del servidor NAS</label>
+
+            <input
+                type="text"
+                id="nas-ruta-input"
+                placeholder="Ejemplo: \\192.168.2.201\Rofrei-NAS"
+                style="font-family:monospace;"
+            >
+
+            <button
+                type="button"
+                onclick="guardarRutaNAS()"
+                style="
+                    margin-top:10px;
+                    background:#dce9f5;
+                    color:#475569;
+                    border:1px solid #c8d8e8;
+                    padding:9px 14px;
+                    border-radius:8px;
+                    cursor:pointer;
+                    font-weight:bold;
+                "
+            >
+                💾 Guardar ruta
+            </button>
+
+        </div>
+
+        <button
+            onclick="abrirNAS()"
+            style="
+                background:var(--acc);
+                color:white;
+                border:none;
+                padding:10px 15px;
+                border-radius:8px;
+                cursor:pointer;
+                font-weight:bold;
+            "
+        >
+            📂 Abrir Rofrei-NAS
+        </button>
+
+        <div
+            id="nas-lista"
+            style="margin-top:20px;"
+        ></div>
+
+    </div>
+
+</section>
 
     </div>
 <div id="mod-empresa" class="mod-sec">
@@ -1413,6 +1492,154 @@ function sync() {
 	
 	
 let nasCurrentPath = '';
+
+let nasConfiguredPath = '';
+
+async function cargarConfiguracionNAS() {
+
+    try {
+
+        const snapshot =
+            await db.ref('configuracion/nasPath').once('value');
+
+        let ruta = snapshot.val();
+
+        if (
+            typeof ruta !== 'string' ||
+            !ruta.trim()
+        ) {
+
+            ruta = '\\\\192.168.2.201\\Rofrei-NAS';
+
+            await db.ref('configuracion/nasPath').set(ruta);
+        }
+
+        nasConfiguredPath = ruta.trim();
+
+        const campo =
+            document.getElementById('nas-ruta-configurada');
+
+        const input =
+            document.getElementById('nas-ruta-input');
+
+        if (campo) {
+            campo.textContent = nasConfiguredPath;
+        }
+
+        if (input) {
+            input.value = nasConfiguredPath;
+        }
+
+        const panelAdmin =
+            document.getElementById('nas-config-admin');
+
+        if (panelAdmin) {
+
+            panelAdmin.style.display =
+                (
+                    user &&
+                    user.role === 'Administrador'
+                )
+                ? 'block'
+                : 'none';
+        }
+
+        return nasConfiguredPath;
+
+    } catch (error) {
+
+        console.error(
+            'Error al cargar configuración NAS:',
+            error
+        );
+
+        const campo =
+            document.getElementById('nas-ruta-configurada');
+
+        if (campo) {
+            campo.textContent =
+                'No se pudo cargar la configuración';
+        }
+
+        return null;
+    }
+}
+
+async function guardarRutaNAS() {
+
+    if (
+        !user ||
+        user.role !== 'Administrador'
+    ) {
+
+        alert(
+            'Solo un Administrador puede modificar la ruta del NAS.'
+        );
+
+        return;
+    }
+
+    const input =
+        document.getElementById('nas-ruta-input');
+
+    if (!input) return;
+
+    const nuevaRuta =
+        input.value.trim();
+
+    if (!nuevaRuta) {
+
+        alert(
+            'Debes indicar una ruta de servidor NAS.'
+        );
+
+        return;
+    }
+
+    if (
+        !nuevaRuta.startsWith('\\\\')
+    ) {
+
+        alert(
+            'La ruta debe comenzar con \\\\.'
+        );
+
+        return;
+    }
+
+    try {
+
+        await db
+            .ref('configuracion/nasPath')
+            .set(nuevaRuta);
+
+        nasConfiguredPath = nuevaRuta;
+
+        const campo =
+            document.getElementById('nas-ruta-configurada');
+
+        if (campo) {
+            campo.textContent =
+                nasConfiguredPath;
+        }
+
+        alert(
+            'Ruta del NAS actualizada correctamente.'
+        );
+
+        nasCurrentPath = '';
+
+        await abrirNAS('');
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            'No se pudo guardar la nueva ruta del NAS.'
+        );
+    }
+}
 
 function escaparNAS(texto) {
     return String(texto)
@@ -2105,6 +2332,10 @@ function showMod(mod) {
     // 1. Mostrar la sección si existe
     const section = document.getElementById(`mod-${mod}`);
     if (section) section.style.display = 'block';
+
+if (mod === 'nas') {
+    cargarConfiguracionNAS();
+}
 
     // 2. Activar el botón correspondiente
     const navBtn = document.getElementById(`nav-${mod}`);
