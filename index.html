@@ -81,9 +81,6 @@
             pointer-events: none;
         }
 
-        nav.nav-hidden + #btn-toggle-nav {
-            left: 8px;
-        }
 
         nav button {
             width: 100%;
@@ -164,23 +161,32 @@
 
 #btn-toggle-nav {
     position: fixed;
-    left: 8px;
-    top: 52px;
-    z-index: 300;
-    width: 40px;
-    height: 34px;
+    left: 9px;
+    top: 44px;
+    z-index: 1000;
+
+    width: 42px;
+    height: 36px;
+
     padding: 0;
+
     border: 1px solid #d5e1ee;
-    border-radius: 9px;
+    border-radius: 10px;
+
     background: #e8f0f7;
     color: #475569;
+
     cursor: pointer;
-    font-size: 16px;
+
+    font-size: 17px;
     font-weight: 600;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 3px 10px rgba(71,85,105,0.10);
+
+    box-shadow: 0 4px 12px rgba(71,85,105,0.14);
+
     transition:
         background 0.22s ease,
         color 0.22s ease,
@@ -191,8 +197,11 @@
 #btn-toggle-nav:hover {
     background: #dce9f5;
     color: #334155;
-    transform: scale(1.06);
-    box-shadow: 0 6px 16px rgba(71,85,105,0.14);
+
+    transform: scale(1.08);
+
+    box-shadow:
+        0 7px 18px rgba(71,85,105,0.18);
 }
 
         @keyframes menuFadeIn {
@@ -378,9 +387,10 @@
 
     <button
         id="btn-toggle-nav"
+        type="button"
         onclick="alternarBarraMenu()"
         title="Ocultar menú"
-        class="btn-toggle-menu"
+        aria-label="Mostrar u ocultar menú"
     >
         👁️
     </button>
@@ -1731,21 +1741,27 @@ function ocultarMenuGestao() {
 }
 
 function alternarBarraMenu() {
+
     const nav = document.getElementById('main-nav');
     const app = document.getElementById('app');
     const boton = document.getElementById('btn-toggle-nav');
 
     if (!nav || !app || !boton) return;
 
-    nav.classList.toggle('nav-hidden');
+    const menuOculto =
+        nav.classList.toggle('nav-hidden');
 
-    if (nav.classList.contains('nav-hidden')) {
+    if (menuOculto) {
 
         app.classList.remove('menu-expanded');
         app.classList.add('menu-collapsed');
 
         boton.innerHTML = '☰';
         boton.title = 'Mostrar menú';
+        boton.setAttribute(
+            'aria-label',
+            'Mostrar menú'
+        );
 
     } else {
 
@@ -1754,8 +1770,13 @@ function alternarBarraMenu() {
 
         boton.innerHTML = '👁️';
         boton.title = 'Ocultar menú';
-
+        boton.setAttribute(
+            'aria-label',
+            'Ocultar menú'
+        );
     }
+
+    boton.style.display = 'flex';
 }
 
 function showMod(mod) {
