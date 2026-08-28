@@ -81,6 +81,10 @@
             pointer-events: none;
         }
 
+        nav.nav-hidden + #btn-toggle-nav {
+            left: 8px;
+        }
+
         nav button {
             width: 100%;
             min-width: 90px;
@@ -159,18 +163,24 @@
         }
 
 #btn-toggle-nav {
-    position: relative;
-    width: 100%;
-    padding: 11px 13px;
-    margin-bottom: 3px;
+    position: fixed;
+    left: 8px;
+    top: 52px;
+    z-index: 300;
+    width: 40px;
+    height: 34px;
+    padding: 0;
     border: 1px solid #d5e1ee;
     border-radius: 9px;
     background: #e8f0f7;
     color: #475569;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 16px;
     font-weight: 600;
-    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 3px 10px rgba(71,85,105,0.10);
     transition:
         background 0.22s ease,
         color 0.22s ease,
@@ -181,8 +191,8 @@
 #btn-toggle-nav:hover {
     background: #dce9f5;
     color: #334155;
-    transform: translateX(4px);
-    box-shadow: 0 5px 14px rgba(71,85,105,0.10);
+    transform: scale(1.06);
+    box-shadow: 0 6px 16px rgba(71,85,105,0.14);
 }
 
         @keyframes menuFadeIn {
@@ -365,16 +375,17 @@
 </div>
 
 <div id="app" class="menu-expanded" style="display: none;">
-        <nav id="main-nav">
 
-        <button
-            id="btn-toggle-nav"
-            onclick="alternarBarraMenu()"
-            title="Mostrar/Ocultar menu"
-            class="btn-toggle-menu"
-        >
-            👁️ Ocultar menú
-        </button>
+    <button
+        id="btn-toggle-nav"
+        onclick="alternarBarraMenu()"
+        title="Ocultar menú"
+        class="btn-toggle-menu"
+    >
+        👁️
+    </button>
+
+    <nav id="main-nav">
 
         <button onclick="showMod('empresa')">
             🏢 EMPRESA
@@ -1733,7 +1744,7 @@ function alternarBarraMenu() {
         app.classList.remove('menu-expanded');
         app.classList.add('menu-collapsed');
 
-        boton.innerHTML = '👁️ Mostrar menú';
+        boton.innerHTML = '☰';
         boton.title = 'Mostrar menú';
 
     } else {
@@ -1741,7 +1752,7 @@ function alternarBarraMenu() {
         app.classList.remove('menu-collapsed');
         app.classList.add('menu-expanded');
 
-        boton.innerHTML = '🙈 Ocultar menú';
+        boton.innerHTML = '👁️';
         boton.title = 'Ocultar menú';
 
     }
