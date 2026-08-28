@@ -228,7 +228,102 @@
         }
 
         .container { padding: 15px; max-width: 1400px; margin: auto; }
-        .mod-sec { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+                .mod-sec {
+            display: none;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .module-create-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .module-create-button {
+            border: 1px solid #c8d8e8;
+            background: #e8f1f7;
+            color: #40566b;
+            padding: 10px 16px;
+            border-radius: 9px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all 0.22s ease;
+            box-shadow: 0 3px 10px rgba(71,85,105,0.08);
+        }
+
+        .module-create-button:hover {
+            background: #dceaf4;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(71,85,105,0.12);
+        }
+
+        .form-popup-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 5000;
+            background: rgba(51,65,85,0.32);
+            backdrop-filter: blur(3px);
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .form-popup-backdrop.active {
+            display: flex;
+        }
+
+        .form-box.form-popup-active {
+            position: fixed;
+            z-index: 5001;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: min(1000px, calc(100vw - 40px));
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            margin: 0;
+            box-sizing: border-box;
+            background: white;
+            border: 1px solid #d5e1ee;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 20px 60px rgba(51,65,85,0.22);
+        }
+
+        .form-popup-close-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 8px;
+        }
+
+        .form-popup-close {
+            border: 1px solid #e2d4d6;
+            background: #f7e9eb;
+            color: #7a5056;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+
+        .form-popup-close:hover {
+            background: #f1dfe2;
+            transform: scale(1.05);
+        }
+
+        body.form-popup-open {
+            overflow: hidden;
+        }
         
         /* Formularios */
         .form-box { border: 1px solid #e2e8f0; padding: 15px; border-radius: 6px; margin-bottom: 20px; background: #fff; }
@@ -1777,6 +1872,171 @@ function alternarBarraMenu() {
     }
 
     boton.style.display = 'flex';
+}
+
+function inicializarFormulariosPopup() {
+
+    const modulos = [
+        'empresa',
+        'obras',
+        'rend',
+        'horas',
+        'obs',
+        'ne',
+        'consultas',
+        'ped',
+        'tar',
+        'users',
+        'forn'
+    ];
+
+    modulos.forEach(mod => {
+
+        const section = document.getElementById(`mod-${mod}`);
+
+        if (!section) return;
+
+        const form = section.querySelector('.form-box');
+
+        if (!form) return;
+
+        if (section.querySelector('.module-create-toolbar')) {
+            return;
+        }
+
+        const toolbar = document.createElement('div');
+
+        toolbar.className = 'module-create-toolbar';
+
+        const button = document.createElement('button');
+
+        button.type = 'button';
+        button.className = 'module-create-button';
+
+        if (mod === 'empresa') {
+            button.innerHTML = '✏️ Editar dados da empresa';
+        } else {
+            button.innerHTML = '＋ Novo registro';
+        }
+
+        button.onclick = () => {
+
+            if (
+                mod === 'users' &&
+                (!user || user.role !== 'Administrador')
+            ) {
+                alert('Acesso restrito a Administrador.');
+                return;
+            }
+
+            if (mod === 'empresa') {
+                abrirFormularioModulo(mod);
+                return;
+            }
+
+            novoRegistroModulo(mod);
+        };
+
+        toolbar.appendChild(button);
+
+        section.insertBefore(toolbar, form);
+
+        form.dataset.popupPrepared = 'true';
+
+        form.insertAdjacentHTML(
+            'afterbegin',
+            `
+            <div class="form-popup-close-row">
+                <button
+                    type="button"
+                    class="form-popup-close"
+                    onclick="fecharFormularioModulo('${mod}')"
+                    title="Fechar"
+                >
+                    ✕
+                </button>
+            </div>
+            `
+        );
+
+        form.style.display = 'none';
+    });
+}
+
+function abrirFormularioModulo(mod) {
+
+    const section = document.getElementById(`mod-${mod}`);
+
+    if (!section) return;
+
+    const form = section.querySelector('.form-box');
+
+    const backdrop =
+        document.getElementById('form-popup-backdrop');
+
+    if (!form || !backdrop) return;
+
+    form.classList.add('form-popup-active');
+
+    form.style.display = 'block';
+
+    backdrop.classList.add('active');
+
+    document.body.classList.add('form-popup-open');
+
+}
+
+function fecharFormularioModulo(mod) {
+
+    const section = document.getElementById(`mod-${mod}`);
+
+    if (!section) return;
+
+    const form = section.querySelector('.form-box');
+
+    const backdrop =
+        document.getElementById('form-popup-backdrop');
+
+    if (form) {
+
+        form.classList.remove('form-popup-active');
+
+        form.style.display = 'none';
+    }
+
+    if (backdrop) {
+        backdrop.classList.remove('active');
+    }
+
+    document.body.classList.remove('form-popup-open');
+
+}
+
+function fecharFormularioPorFondo(event) {
+
+    if (event.target.id !== 'form-popup-backdrop') {
+        return;
+    }
+
+    if (currentMod) {
+        fecharFormularioModulo(currentMod);
+    }
+}
+
+function novoRegistroModulo(mod) {
+
+    if (
+        mod === 'users' &&
+        (!user || user.role !== 'Administrador')
+    ) {
+        alert('Acesso restrito a Administrador.');
+        return;
+    }
+
+    cancelarEdit(mod);
+
+    abrirFormularioModulo(mod);
+
 }
 
 function showMod(mod) {
@@ -4500,11 +4760,20 @@ function prepEdit(mod, id) {
 		document.getElementById('forn-morada').value = item.morada || '';
 		document.getElementById('forn-ativ').value = item.atividade || '';
 	}
-    window.scrollTo({top: 0, behavior: 'smooth'});
+        abrirFormularioModulo(mod);
+
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
 }
 
 function cancelarEdit(mod) {
-    if(mod === 'empresa') return; // <--- AÑADIR ESTA LÍNEA (Evita que borre los datos visuales)
+
+    if(mod === 'empresa') {
+        fecharFormularioModulo(mod);
+        return;
+    } // <--- AÑADIR ESTA LÍNEA (Evita que borre los datos visuales)
     if(mod === 'ped'){
         document.getElementById('ped-obr').disabled = false;
         document.getElementById('ped-prov').disabled = false;
@@ -4543,7 +4812,11 @@ function cancelarEdit(mod) {
         document.getElementById('rend-body').innerHTML = '';
         addRendRow();
     }
-    if(mod === 'horas' && document.getElementById('h-est')) document.getElementById('h-est').disabled = true;
+    if(mod === 'horas' && document.getElementById('h-est')) {
+        document.getElementById('h-est').disabled = true;
+    }
+
+    fecharFormularioModulo(mod);
 }
 
 function getPrefix(mod) {
@@ -6528,12 +6801,23 @@ function logout() {
 
 // Inicialização
 window.onload = () => {
+
+    inicializarFormulariosPopup();
+
     sync();
 
     // updateSelects() eliminado de aquí para evitar reseteo de selección
+
 };
 
 </script>
+
+<div
+    id="form-popup-backdrop"
+    class="form-popup-backdrop"
+    onclick="cerrarFormularioPorFondo(event)"
+></div>
+
 <datalist id="lista-forn-sug"></datalist>
 <datalist id="lista-task-sug"></datalist>
 </body>
