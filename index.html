@@ -1018,6 +1018,141 @@ function rutaNASHTML(ruta) {
     return html;
 }
 
+async function crearCarpetaNAS() {
+
+    const nombre = prompt('Nombre de la nueva carpeta:');
+
+    if (!nombre) return;
+
+    try {
+
+        const response = await fetch(
+            'http://127.0.0.1:3000/nas/create-folder',
+            {
+                method: 'POST',
+
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+
+                body: JSON.stringify({
+                    path: nasCurrentPath,
+                    name: nombre.trim()
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!data.success) {
+            alert(`Error: ${data.error}`);
+            return;
+        }
+
+        await abrirNAS(nasCurrentPath);
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert('No se pudo crear la carpeta.');
+
+    }
+
+}
+
+async function renombrarNAS(nombreActual) {
+
+    const nuevoNombre = prompt(
+        'Nuevo nombre:',
+        nombreActual
+    );
+
+    if (!nuevoNombre || nuevoNombre === nombreActual) return;
+
+    try {
+
+        const response = await fetch(
+            'http://127.0.0.1:3000/nas/rename',
+            {
+                method: 'POST',
+
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+
+                body: JSON.stringify({
+                    path: nasCurrentPath,
+                    oldName: nombreActual,
+                    newName: nuevoNombre.trim()
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!data.success) {
+            alert(`Error: ${data.error}`);
+            return;
+        }
+
+        await abrirNAS(nasCurrentPath);
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert('No se pudo renombrar el elemento.');
+
+    }
+
+}
+
+async function eliminarNAS(nombre) {
+
+    const confirmar = confirm(
+        `¿Seguro que deseas eliminar "${nombre}"?`
+    );
+
+    if (!confirmar) return;
+
+    try {
+
+        const response = await fetch(
+            'http://127.0.0.1:3000/nas/delete',
+            {
+                method: 'POST',
+
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+
+                body: JSON.stringify({
+                    path: nasCurrentPath,
+                    name: nombre
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!data.success) {
+            alert(`Error: ${data.error}`);
+            return;
+        }
+
+        await abrirNAS(nasCurrentPath);
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert('No se pudo eliminar el elemento.');
+
+    }
+
+}
+
 async function abrirNAS(ruta = '') {
 
     nasCurrentPath = ruta;
@@ -1050,6 +1185,27 @@ async function abrirNAS(ruta = '') {
         }
 
         let html = `
+            <div style="
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                gap:10px;
+                margin-bottom:15px;
+            ">
+
+                <button
+                    onclick="crearCarpetaNAS()"
+                    style="
+                        padding:9px 14px;
+                        cursor:pointer;
+                        font-weight:bold;
+                    "
+                >
+                    ➕ Nueva carpeta
+                </button>
+
+            </div>
+
             <div style="
                 padding:12px;
                 margin-bottom:15px;
@@ -1113,17 +1269,47 @@ async function abrirNAS(ruta = '') {
 
                 const nuevaRutaJS = nuevaRuta.replace(/\\/g, '\\\\');
 
+                                const nombreJS = JSON.stringify(folder.name);
+
                 return `
                     <div
-                        onclick="abrirNAS('${nuevaRutaJS}')"
                         style="
+                            display:flex;
+                            align-items:center;
+                            justify-content:space-between;
+                            gap:10px;
                             padding:10px;
                             border:1px solid #ddd;
                             border-radius:5px;
-                            cursor:pointer;
                         "
                     >
-                        📁 ${escaparNAS(folder.name)}
+                        <div
+                            onclick="abrirNAS('${nuevaRutaJS}')"
+                            style="
+                                flex:1;
+                                cursor:pointer;
+                            "
+                        >
+                            📁 ${escaparNAS(folder.name)}
+                        </div>
+
+                        <div style="display:flex; gap:5px;">
+
+                            <button
+                                onclick='renombrarNAS(${nombreJS})'
+                                title="Renombrar"
+                            >
+                                ✏️
+                            </button>
+
+                            <button
+                                onclick='eliminarNAS(${nombreJS})'
+                                title="Eliminar"
+                            >
+                                🗑️
+                            </button>
+
+                        </div>
                     </div>
                 `;
 
@@ -1134,16 +1320,42 @@ async function abrirNAS(ruta = '') {
 
             html += data.files.map(file => {
 
+                                const nombreJS = JSON.stringify(file.name);
+
                 return `
                     <div
                         style="
+                            display:flex;
+                            align-items:center;
+                            justify-content:space-between;
+                            gap:10px;
                             padding:10px;
                             border:1px solid #e2e8f0;
                             border-radius:5px;
                             background:#fafafa;
                         "
                     >
-                        📄 ${escaparNAS(file.name)}
+                        <div style="flex:1;">
+                            📄 ${escaparNAS(file.name)}
+                        </div>
+
+                        <div style="display:flex; gap:5px;">
+
+                            <button
+                                onclick='renombrarNAS(${nombreJS})'
+                                title="Renombrar"
+                            >
+                                ✏️
+                            </button>
+
+                            <button
+                                onclick='eliminarNAS(${nombreJS})'
+                                title="Eliminar"
+                            >
+                                🗑️
+                            </button>
+
+                        </div>
                     </div>
                 `;
 
