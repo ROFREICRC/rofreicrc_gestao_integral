@@ -188,6 +188,7 @@
         <button id="nav-notif" onclick="showMod('notif')">🔔 NOTIF</button>
         <button id="nav-forn" onclick="showMod('forn')">🚚 FORNECEDORES</button>
         <button id="nav-users" onclick="showMod('users')" style="background:var(--err)">👥 ADMIN</button>
+        <button id="nav-nas" onclick="showMod('nas')">📁 NAS</button>
         <button onclick="logout()" style="background:var(--err); color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">Sair</button>
     </nav>
 
@@ -748,6 +749,27 @@
 				<input type="text" id="filt-forn-ativ" placeholder="🔍 Pesquisar por Atividade..." oninput="renderForn()">
             </div>
             <div id="list-forn"></div>
+                </section>
+
+        <section id="mod-nas" class="mod-sec">
+            <div class="form-box">
+                <h3>📁 Explorador NAS</h3>
+
+                <div style="background:#f8fafc; padding:12px; border:1px solid #cbd5e1; border-radius:6px; margin-bottom:15px;">
+                    <b>Servidor:</b>
+                    <span style="font-family:monospace;">
+                        \\192.168.2.201\Rofrei-NAS
+                    </span>
+                </div>
+
+                <button
+                    onclick="abrirNAS()"
+                    style="background:var(--acc); color:white; border:none; padding:10px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">
+                    📂 Abrir Rofrei-NAS
+                </button>
+
+                <div id="nas-lista" style="margin-top:20px;"></div>
+            </div>
         </section>
 
     </div>
@@ -939,6 +961,11 @@ function sync() {
 }
 	
 	
+function abrirNAS() {
+    const rutaNAS = 'file://192.168.2.201/Rofrei-NAS/';
+    window.open(rutaNAS, '_blank');
+}
+
 function showMod(mod) {
     currentMod = mod;
     massMode = false;
