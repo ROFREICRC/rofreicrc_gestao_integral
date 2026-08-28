@@ -963,6 +963,61 @@ function sync() {
 	
 let nasCurrentPath = '';
 
+function escaparNAS(texto) {
+    return String(texto)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function rutaNASHTML(ruta) {
+
+    const partes = ruta
+        .split('\\')
+        .filter(Boolean);
+
+    let rutaConstruida = '';
+
+    let html = `
+        <span
+            onclick="abrirNAS('')"
+            style="
+                cursor:pointer;
+                font-weight:bold;
+            "
+        >
+            📁 Rofrei-NAS
+        </span>
+    `;
+
+    partes.forEach((parte) => {
+
+        rutaConstruida = rutaConstruida
+            ? `${rutaConstruida}\\${parte}`
+            : parte;
+
+        const rutaDestino = rutaConstruida.replace(/\\/g, '\\\\');
+
+        html += `
+            <span style="margin:0 5px; color:#64748b;">›</span>
+
+            <span
+                onclick="abrirNAS('${rutaDestino}')"
+                style="
+                    cursor:pointer;
+                    font-weight:bold;
+                "
+            >
+                ${escaparNAS(parte)}
+            </span>
+        `;
+    });
+
+    return html;
+}
+
 async function abrirNAS(ruta = '') {
 
     nasCurrentPath = ruta;
@@ -987,69 +1042,130 @@ async function abrirNAS(ruta = '') {
 
             lista.innerHTML = `
                 <div style="padding:15px; color:red;">
-                    ❌ Error: ${data.error}
+                    ❌ Error: ${escaparNAS(data.error)}
                 </div>
             `;
 
             return;
         }
 
-        let html = '';
+        let html = `
+            <div style="
+                padding:12px;
+                margin-bottom:15px;
+                border:1px solid #cbd5e1;
+                border-radius:6px;
+                background:#f8fafc;
+                line-height:1.8;
+            ">
+                <div style="font-size:11px; color:#64748b; margin-bottom:4px;">
+                    RUTA ACTUAL
+                </div>
+
+                <div style="
+                    font-family:monospace;
+                    word-break:break-word;
+                ">
+                    ${rutaNASHTML(ruta)}
+                </div>
+            </div>
+        `;
 
         if (ruta) {
 
             const parentPath = ruta
-                .split(/[\\/]/)
+                .split('\\')
                 .filter(Boolean)
                 .slice(0, -1)
                 .join('\\');
 
+            const parentPathJS = parentPath.replace(/\\/g, '\\\\');
+
             html += `
                 <button
-                    onclick="abrirNAS('${parentPath.replace(/\\/g, '\\\\')}')"
+                    onclick="abrirNAS('${parentPathJS}')"
                     style="
                         margin-bottom:15px;
                         padding:8px 12px;
                         cursor:pointer;
-                    ">
+                    "
+                >
                     ⬅️ Volver
                 </button>
             `;
         }
 
-        if (!data.folders || data.folders.length === 0) {
+        html += `
+            <div style="
+                display:flex;
+                flex-direction:column;
+                gap:5px;
+            ">
+        `;
 
-            html += `
-                <div style="padding:15px;">
-                    No se encontraron carpetas.
-                </div>
-            `;
-
-        } else {
+        if (data.folders && data.folders.length > 0) {
 
             html += data.folders.map(folder => {
 
                 const nuevaRuta = ruta
-                    ? `${ruta}\\${folder}`
-                    : folder;
+                    ? `${ruta}\\${folder.name}`
+                    : folder.name;
+
+                const nuevaRutaJS = nuevaRuta.replace(/\\/g, '\\\\');
 
                 return `
                     <div
-                        onclick="abrirNAS('${nuevaRuta.replace(/\\/g, '\\\\')}')"
+                        onclick="abrirNAS('${nuevaRutaJS}')"
                         style="
                             padding:10px;
-                            margin-bottom:5px;
                             border:1px solid #ddd;
                             border-radius:5px;
                             cursor:pointer;
-                        ">
-                        📁 ${folder}
+                        "
+                    >
+                        📁 ${escaparNAS(folder.name)}
                     </div>
                 `;
 
             }).join('');
-
         }
+
+        if (data.files && data.files.length > 0) {
+
+            html += data.files.map(file => {
+
+                return `
+                    <div
+                        style="
+                            padding:10px;
+                            border:1px solid #e2e8f0;
+                            border-radius:5px;
+                            background:#fafafa;
+                        "
+                    >
+                        📄 ${escaparNAS(file.name)}
+                    </div>
+                `;
+
+            }).join('');
+        }
+
+        if (
+            (!data.folders || data.folders.length === 0) &&
+            (!data.files || data.files.length === 0)
+        ) {
+
+            html += `
+                <div style="
+                    padding:15px;
+                    color:#64748b;
+                ">
+                    Esta carpeta está vacía.
+                </div>
+            `;
+        }
+
+        html += `</div>`;
 
         lista.innerHTML = html;
 
@@ -1066,7 +1182,6 @@ async function abrirNAS(ruta = '') {
     }
 
 }
-
 function showMod(mod) {
     currentMod = mod;
     massMode = false;
