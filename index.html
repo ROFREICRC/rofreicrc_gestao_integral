@@ -12,13 +12,192 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
     <style>
-        :root { --p: #0f172a; --s: #334155; --acc: #2563eb; --ok: #16a34a; --err: #dc2626; --warn: #ea580c; --bg: #f8fafc; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: var(--bg); font-size: 12px; color: #1e293b; }
-        header { background: var(--p); color: white; padding: 15px; text-align: center; font-weight: bold; font-size: 16px; position: sticky; top: 0; z-index: 200;}
-        
-        nav { display: flex; flex-wrap: wrap; background: #e2e8f0; padding: 5px; gap: 5px; position: sticky; top: 49px; z-index: 100; }
-        nav button { flex: 1; min-width: 90px; padding: 10px; border: none; background: var(--s); color: white; cursor: pointer; font-weight: bold; border-radius: 4px; transition: 0.2s;}
-        nav button.active { background: var(--acc); box-shadow: inset 0 -4px 0 white; }
+                :root {
+            --p: #64748b;
+            --s: #94a3b8;
+            --acc: #93c5fd;
+            --ok: #a7d9c0;
+            --err: #e8b4b8;
+            --warn: #f3c9a8;
+            --bg: #f8fafc;
+
+            --menu-bg: #eef2f7;
+            --menu-border: #dbe3ec;
+            --menu-text: #475569;
+            --menu-hover: #e2ecf8;
+            --menu-active: #d5e5f6;
+            --menu-shadow: rgba(71,85,105,0.12);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            background: var(--bg);
+            font-size: 12px;
+            color: #334155;
+        }
+
+        header {
+            background: linear-gradient(135deg, #dbe7f2, #eaf0f6);
+            color: #334155;
+            padding: 15px 55px 15px 20px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 200;
+            border-bottom: 1px solid var(--menu-border);
+            box-shadow: 0 3px 12px rgba(71,85,105,0.08);
+        }
+
+        nav {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            background: var(--menu-bg);
+            padding: 10px;
+            gap: 6px;
+            position: fixed;
+            top: 49px;
+            left: 0;
+            bottom: 0;
+            z-index: 100;
+            width: 245px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            border-right: 1px solid var(--menu-border);
+            box-shadow: 4px 0 18px var(--menu-shadow);
+            transition: transform 0.28s ease, width 0.28s ease, opacity 0.2s ease;
+        }
+
+        nav.nav-hidden {
+            transform: translateX(-100%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        nav button {
+            width: 100%;
+            min-width: 90px;
+            padding: 11px 13px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--menu-text);
+            cursor: pointer;
+            font-weight: 600;
+            border-radius: 9px;
+            transition:
+                background 0.22s ease,
+                color 0.22s ease,
+                transform 0.22s ease,
+                box-shadow 0.22s ease;
+            text-align: left;
+        }
+
+        nav button:hover {
+            background: var(--menu-hover);
+            color: #334155;
+            transform: translateX(4px);
+            box-shadow: 0 5px 14px rgba(71,85,105,0.10);
+        }
+
+        nav button:active {
+            transform: translateX(2px) scale(0.98);
+        }
+
+        nav button.active {
+            background: var(--menu-active);
+            color: #334155;
+            box-shadow: inset 4px 0 0 #93c5fd, 0 4px 12px rgba(71,85,105,0.08);
+        }
+
+        .menu-gestao-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .menu-gestao-principal {
+            background: #e5edf6 !important;
+            border: 1px solid #d5e1ee !important;
+            color: #3f5368 !important;
+        }
+
+        .menu-gestao-principal:hover {
+            background: #dbe7f2 !important;
+        }
+
+        .menu-gestao-dropdown {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 5px;
+            padding-left: 9px;
+            animation: menuFadeIn 0.18s ease;
+        }
+
+        .menu-gestao-wrapper:hover .menu-gestao-dropdown {
+            display: flex;
+        }
+
+        .menu-gestao-dropdown.menu-open {
+            display: flex;
+        }
+
+        .menu-gestao-dropdown button {
+            background: rgba(255,255,255,0.48);
+            font-size: 11px;
+            padding: 9px 11px;
+        }
+
+        .menu-gestao-dropdown button:hover {
+            background: #e4edf7;
+        }
+
+        #btn-toggle-nav {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 7px 11px;
+            border: 1px solid #d5e1ee;
+            border-radius: 8px;
+            background: #edf3f8;
+            color: #475569;
+            cursor: pointer;
+            font-size: 17px;
+            font-weight: bold;
+            transition: all 0.22s ease;
+        }
+
+        #btn-toggle-nav:hover {
+            background: #dbe7f2;
+            transform: translateY(-50%) scale(1.05);
+            box-shadow: 0 4px 12px rgba(71,85,105,0.12);
+        }
+
+        @keyframes menuFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-4px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        #app {
+            transition: padding-left 0.28s ease;
+        }
+
+        #app.menu-collapsed {
+            padding-left: 0;
+        }
+
+        #app.menu-expanded {
+            padding-left: 245px;
+        }
 
         .container { padding: 15px; max-width: 1400px; margin: auto; }
         .mod-sec { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
@@ -164,7 +343,17 @@
 	<link rel="icon" href="data:,">
 </head>
 <body>
-<header>ROFREICRC v1.0 - GESTÃO INTEGRAL</header>
+<header>
+    <span>ROFREICRC v1.0 - GESTÃO INTEGRAL</span>
+
+    <button
+        id="btn-toggle-nav"
+        onclick="alternarBarraMenu()"
+        title="Mostrar/Ocultar menu"
+    >
+        ☰
+    </button>
+</header>
 <div id="login-sec" style="max-width: 400px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
     <h2 style="text-align: center; color: var(--p); margin-top:0;">Acesso ao Sistema</h2>
     <label>Utilizador</label>
@@ -174,22 +363,132 @@
     <button class="btn-main" style="width:100%" onclick="doLogin()">ENTRAR</button>
 </div>
 
-<div id="app" style="display: none;">
-    <nav>
-		<button onclick="showMod('empresa')">Empresa</button>
-        <button id="nav-obras" onclick="showMod('obras')">🏗️ OBRAS</button>
-        <button id="nav-rend" onclick="showMod('rend')">📊 RENDIMENTOS</button>
-		<button id="nav-horas" onclick="showMod('horas')">🕒 HORAS</button>
-        <button id="nav-obs" onclick="showMod('obs')">📝 OBS</button>
-		<button id="nav-consultas" onclick="showMod('consultas')">🔎 CONSULTAS</button>
-        <button id="nav-ne" onclick="showMod('ne')">📄 N.E.</button>
-        <button id="nav-ped" onclick="showMod('ped')">🛒 PEDIDOS</button>
-        <button id="nav-tar" onclick="showMod('tar')">✅ TAREFAS</button>
-        <button id="nav-notif" onclick="showMod('notif')">🔔 NOTIF</button>
-        <button id="nav-forn" onclick="showMod('forn')">🚚 FORNECEDORES</button>
-        <button id="nav-users" onclick="showMod('users')" style="background:var(--err)">👥 ADMIN</button>
-        <button id="nav-nas" onclick="showMod('nas')">📁 NAS</button>
-        <button onclick="logout()" style="background:var(--err); color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">Sair</button>
+<div id="app" class="menu-expanded" style="display: none;">
+        <nav id="main-nav">
+
+        <button onclick="showMod('empresa')">
+            🏢 EMPRESA
+        </button>
+
+        <button id="nav-nas" onclick="showMod('nas')">
+            📁 NAS
+        </button>
+
+        <button id="nav-notif" onclick="showMod('notif')">
+            🔔 NOTIF
+        </button>
+
+        <button
+            id="nav-users"
+            onclick="showMod('users')"
+            style="background:#f5dfe1;"
+        >
+            👥 ADMIN
+        </button>
+
+        <div
+            class="menu-gestao-wrapper"
+            onmouseenter="mostrarMenuGestao()"
+            onmouseleave="ocultarMenuGestao()"
+        >
+
+            <button
+                type="button"
+                class="menu-gestao-principal"
+                onclick="mostrarMenuGestao()"
+            >
+                🏗️ GESTÃO DE OBRAS ▾
+            </button>
+
+            <div
+                id="menu-gestao-obras"
+                class="menu-gestao-dropdown"
+            >
+
+                <button
+                    id="nav-obras"
+                    onclick="showMod('obras')"
+                >
+                    🏗️ OBRAS
+                </button>
+
+                <button
+                    id="nav-rend"
+                    onclick="showMod('rend')"
+                >
+                    📊 RENDIMENTOS
+                </button>
+
+                <button
+                    id="nav-horas"
+                    onclick="showMod('horas')"
+                >
+                    🕒 HORAS
+                </button>
+
+                <button
+                    id="nav-obs"
+                    onclick="showMod('obs')"
+                >
+                    📝 OBS
+                </button>
+
+                <button
+                    id="nav-consultas"
+                    onclick="showMod('consultas')"
+                >
+                    🔎 CONSULTAS
+                </button>
+
+                <button
+                    id="nav-ne"
+                    onclick="showMod('ne')"
+                >
+                    📄 N.E.
+                </button>
+
+                <button
+                    id="nav-ped"
+                    onclick="showMod('ped')"
+                >
+                    🛒 PEDIDOS
+                </button>
+
+                <button
+                    id="nav-tar"
+                    onclick="showMod('tar')"
+                >
+                    ✅ TAREFAS
+                </button>
+
+                <button
+                    id="nav-forn"
+                    onclick="showMod('forn')"
+                >
+                    🚚 FORNECEDORES
+                </button>
+
+            </div>
+
+        </div>
+
+        <button
+            onclick="logout()"
+            style="
+                margin-top:auto;
+                background:#f5dfe1;
+                color:#475569;
+                border:1px solid #ead1d4;
+                padding:10px 13px;
+                border-radius:9px;
+                cursor:pointer;
+                font-size:12px;
+                font-weight:bold;
+            "
+        >
+            Sair
+        </button>
+
     </nav>
 
     <div class="container">
@@ -1394,6 +1693,39 @@ async function abrirNAS(ruta = '') {
     }
 
 }
+function mostrarMenuGestao() {
+    const menu = document.getElementById('menu-gestao-obras');
+
+    if (menu) {
+        menu.classList.add('menu-open');
+    }
+}
+
+function ocultarMenuGestao() {
+    const menu = document.getElementById('menu-gestao-obras');
+
+    if (menu) {
+        menu.classList.remove('menu-open');
+    }
+}
+
+function alternarBarraMenu() {
+    const nav = document.getElementById('main-nav');
+    const app = document.getElementById('app');
+
+    if (!nav || !app) return;
+
+    nav.classList.toggle('nav-hidden');
+
+    if (nav.classList.contains('nav-hidden')) {
+        app.classList.remove('menu-expanded');
+        app.classList.add('menu-collapsed');
+    } else {
+        app.classList.remove('menu-collapsed');
+        app.classList.add('menu-expanded');
+    }
+}
+
 function showMod(mod) {
     currentMod = mod;
     massMode = false;
@@ -1410,9 +1742,31 @@ function showMod(mod) {
     const section = document.getElementById(`mod-${mod}`);
     if (section) section.style.display = 'block';
 
-    // 2. Activar botón de nav solo si tiene el ID correspondiente
+    // 2. Activar el botón correspondiente
     const navBtn = document.getElementById(`nav-${mod}`);
     if (navBtn) navBtn.classList.add('active');
+
+    // 3. Si pertenece a Gestión de Obras, mantener visualmente activo el grupo
+    const modulosGestao = [
+        'obras',
+        'rend',
+        'horas',
+        'obs',
+        'consultas',
+        'ne',
+        'ped',
+        'tar',
+        'forn'
+    ];
+
+    const menuGestao = document.getElementById('menu-gestao-obras');
+
+    if (
+        menuGestao &&
+        modulosGestao.includes(mod)
+    ) {
+        menuGestao.classList.add('menu-open');
+    }
 
     cancelarEdit(mod);
 }
