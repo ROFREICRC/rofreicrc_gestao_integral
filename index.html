@@ -1900,33 +1900,6 @@ function alternarBarraMenu() {
     boton.style.display = 'flex';
 }
 
-    if (menuOculto) {
-
-        app.classList.remove('menu-expanded');
-        app.classList.add('menu-collapsed');
-
-        boton.innerHTML = '☰';
-        boton.title = 'Mostrar menú';
-        boton.setAttribute(
-            'aria-label',
-            'Mostrar menú'
-        );
-
-    } else {
-
-        app.classList.remove('menu-collapsed');
-        app.classList.add('menu-expanded');
-
-        boton.innerHTML = '👁️';
-        boton.title = 'Ocultar menú';
-        boton.setAttribute(
-            'aria-label',
-            'Ocultar menú'
-        );
-    }
-
-    boton.style.display = 'flex';
-}
 
 function inicializarFormulariosPopup() {
 
