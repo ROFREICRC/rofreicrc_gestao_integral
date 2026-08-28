@@ -40,19 +40,37 @@
         header {
     background: linear-gradient(135deg, #dbe7f2, #eaf0f6);
     color: #334155;
-    padding: 7px 20px;
-    text-align: center;
-    font-weight: bold;
-    font-size: 8px;
+    padding: 5px 10px;
     min-height: 22px;
-    display: flex;
+
+    display: grid;
+    grid-template-columns: 70px 1fr 180px;
     align-items: center;
-    justify-content: center;
+
     position: sticky;
     top: 0;
     z-index: 200;
+
     border-bottom: 1px solid var(--menu-border);
     box-shadow: 0 3px 12px rgba(71,85,105,0.08);
+}
+
+#header-title {
+    text-align: center;
+    font-weight: bold;
+    font-size: 8px;
+}
+
+#header-module {
+    text-align: right;
+    padding-right: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+#header-module:empty {
+    display: none;
 }
 
         nav {
@@ -160,48 +178,47 @@
         }
 
 #btn-toggle-nav {
-    position: fixed;
-    left: 9px;
-    top: 44px;
-    z-index: 1000;
+    position: relative;
 
     width: 42px;
-    height: 36px;
+    height: 30px;
 
     padding: 0;
 
     border: 1px solid #d5e1ee;
-    border-radius: 10px;
+    border-radius: 9px;
 
     background: #e8f0f7;
     color: #475569;
 
     cursor: pointer;
 
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 600;
 
     display: flex;
     align-items: center;
     justify-content: center;
 
-    box-shadow: 0 4px 12px rgba(71,85,105,0.14);
+    box-shadow: 0 3px 10px rgba(71,85,105,0.10);
 
     transition:
         background 0.22s ease,
         color 0.22s ease,
         transform 0.22s ease,
         box-shadow 0.22s ease;
+
+    justify-self: start;
 }
 
 #btn-toggle-nav:hover {
     background: #dce9f5;
     color: #334155;
 
-    transform: scale(1.08);
+    transform: scale(1.06);
 
     box-shadow:
-        0 7px 18px rgba(71,85,105,0.18);
+        0 6px 16px rgba(71,85,105,0.15);
 }
 
         @keyframes menuFadeIn {
@@ -466,8 +483,26 @@
 	<link rel="icon" href="data:,">
 </head>
 <body>
-<header>
-    <span>ROFREICRC v1.0 - GESTÃO INTEGRAL</span>
+<header id="main-header">
+
+    <button
+        id="btn-toggle-nav"
+        type="button"
+        onclick="alternarBarraMenu()"
+        title="Ocultar menú"
+        aria-label="Mostrar u ocultar menú"
+    >
+        👁️
+    </button>
+
+    <span id="header-title">
+        ROFREICRC v1.0 - GESTÃO INTEGRAL
+    </span>
+
+    <span id="header-module">
+        🏗️ OBRAS
+    </span>
+
 </header>
 <div id="login-sec" style="max-width: 400px; margin: 100px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
     <h2 style="text-align: center; color: var(--p); margin-top:0;">Acesso ao Sistema</h2>
@@ -480,15 +515,6 @@
 
 <div id="app" class="menu-expanded" style="display: none;">
 
-    <button
-        id="btn-toggle-nav"
-        type="button"
-        onclick="alternarBarraMenu()"
-        title="Ocultar menú"
-        aria-label="Mostrar u ocultar menú"
-    >
-        👁️
-    </button>
 
     <nav id="main-nav">
 
@@ -1843,8 +1869,36 @@ function alternarBarraMenu() {
 
     if (!nav || !app || !boton) return;
 
-    const menuOculto =
+    const oculto =
         nav.classList.toggle('nav-hidden');
+
+    if (oculto) {
+
+        app.classList.remove('menu-expanded');
+        app.classList.add('menu-collapsed');
+
+        boton.innerHTML = '☰';
+        boton.title = 'Mostrar menú';
+        boton.setAttribute(
+            'aria-label',
+            'Mostrar menú'
+        );
+
+    } else {
+
+        app.classList.remove('menu-collapsed');
+        app.classList.add('menu-expanded');
+
+        boton.innerHTML = '👁️';
+        boton.title = 'Ocultar menú';
+        boton.setAttribute(
+            'aria-label',
+            'Ocultar menú'
+        );
+    }
+
+    boton.style.display = 'flex';
+}
 
     if (menuOculto) {
 
@@ -2039,8 +2093,33 @@ function novoRegistroModulo(mod) {
 }
 
 function showMod(mod) {
+
     currentMod = mod;
     massMode = false;
+
+    const nombresModulos = {
+        empresa: '🏢 EMPRESA',
+        nas: '📁 NAS',
+        notif: '🔔 NOTIFICAÇÕES',
+        users: '👥 ADMIN',
+        obras: '🏗️ OBRAS',
+        rend: '📊 RENDIMENTOS',
+        horas: '🕒 HORAS',
+        obs: '📝 OBSERVAÇÕES',
+        consultas: '🔎 CONSULTAS',
+        ne: '📄 N.E.',
+        ped: '🛒 PEDIDOS',
+        tar: '✅ TAREFAS',
+        forn: '🚚 FORNECEDORES'
+    };
+
+    const headerModule =
+        document.getElementById('header-module');
+
+    if (headerModule) {
+        headerModule.textContent =
+            nombresModulos[mod] || mod.toUpperCase();
+    }
     
     document.querySelectorAll('.mod-sec').forEach(s => {
         s.style.display = 'none';
@@ -4770,7 +4849,7 @@ function prepEdit(mod, id) {
 function cancelarEdit(mod) {
 
     if(mod === 'empresa') {
-        fecharFormularioModulo(mod);
+        editingId = null;
         return;
     } // <--- AÑADIR ESTA LÍNEA (Evita que borre los datos visuales)
     if(mod === 'ped'){
