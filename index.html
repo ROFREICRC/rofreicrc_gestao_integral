@@ -782,9 +782,30 @@
 
     <div class="form-box">
 
-        <h3 id="orcamentos-vista-titulo">
-            📋 Lista de Propostas
-        </h3>
+        <div style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:10px;
+            margin-bottom:15px;
+        ">
+
+            <h3
+                id="orcamentos-vista-titulo"
+                style="margin:0;"
+            >
+                📋 Lista de Propostas
+            </h3>
+
+            <button
+                type="button"
+                class="module-create-button"
+                onclick="novaPropostaOrcamento()"
+            >
+                ＋ Nova Proposta
+            </button>
+
+        </div>
 
         <div
             id="list-orcamentos"
@@ -1555,7 +1576,10 @@ let DB = {
 };
 let user = null; 
 let currentMod = 'obras'; 
-let editingId = null; 
+let editingId = null;
+
+let editingOrcamentoId = null;
+let orcamentoAnoSelecionado = null; 
 let activeNotaId = null; 
 let activeFileId = null;
 let massMode = false;
@@ -1623,7 +1647,20 @@ function triggerRender() {
 
 // Sincronización en Tiempo Real (Optimizada para Base64 e Bandwidth)
 function sync() {
-    const modules = ['obras', 'rend', 'horas', 'ne', 'consultas', 'ped', 'tar', 'obs', 'users', 'notif', 'forn'];
+    const modules = [
+    'obras',
+    'rend',
+    'horas',
+    'ne',
+    'consultas',
+    'ped',
+    'tar',
+    'obs',
+    'users',
+    'notif',
+    'forn',
+    'orcamentos'
+];
     
     modules.forEach(mod => {
         db.ref(mod).on('child_added', snap => {
@@ -2616,6 +2653,8 @@ function alternarListaPropostas() {
 
 function mostrarListaPropostas() {
 
+    orcamentoAnoSelecionado = null;
+
     const menu =
         document.getElementById(
             'menu-orcamentos'
@@ -2699,6 +2738,9 @@ function eliminarAnoOrcamento(ano) {
 
 
 function abrirAnoOrcamento(ano) {
+
+    orcamentoAnoSelecionado =
+        Number(ano);
 
     const menu =
         document.getElementById(
@@ -2858,6 +2900,642 @@ function mostrarVistaAnoOrcamento(ano) {
     }
 }
 
+function novaPropostaOrcamento() {
+
+    if (!user) {
+
+        alert(
+            'É necessário iniciar sessão.'
+        );
+
+        return;
+    }
+
+    if (
+        !orcamentoAnoSelecionado
+    ) {
+
+        alert(
+            'Selecione primeiro um ano para criar a proposta.'
+        );
+
+        return;
+    }
+
+    editingOrcamentoId = null;
+
+    document.getElementById(
+        'orcamento-popup-titulo'
+    ).textContent =
+        '📋 Nova Proposta';
+
+    document.getElementById(
+        'orc-ano'
+    ).value =
+        orcamentoAnoSelecionado;
+
+    document.getElementById(
+        'orc-num'
+    ).value = '';
+
+    document.getElementById(
+        'orc-designacao'
+    ).value = '';
+
+    document.getElementById(
+        'orc-prazo'
+    ).value = '';
+
+    document.getElementById(
+        'orc-data-rececao'
+    ).value = '';
+
+    document.getElementById(
+        'orc-data-apresentacao'
+    ).value = '';
+
+    document.getElementById(
+        'orc-tempo-utilizado'
+    ).value = '';
+
+    document.getElementById(
+        'orc-observacoes'
+    ).value = '';
+
+    document.getElementById(
+        'orc-estado'
+    ).value = '';
+
+    document.getElementById(
+        'orc-link'
+    ).value = '';
+
+    document.getElementById(
+        'orc-obra'
+    ).value = '';
+
+    document.getElementById(
+        'orc-preco-custo'
+    ).value = '';
+
+    document.getElementById(
+        'orc-preco-venda'
+    ).value = '';
+
+    document.getElementById(
+        'orc-k'
+    ).value = '';
+
+    document.getElementById(
+        'orc-perc-k'
+    ).value = '';
+
+    atualizarListaObrasOrcamento();
+
+    const popup =
+        document.getElementById(
+            'orcamento-popup'
+        );
+
+    const backdrop =
+        document.getElementById(
+            'form-popup-backdrop'
+        );
+
+    popup.style.display = 'block';
+
+    backdrop.classList.add('active');
+
+    document.body.classList.add(
+        'form-popup-open'
+    );
+}
+
+function editarPropostaOrcamento(id) {
+
+    const proposta =
+        DB.orcamentos.find(
+            item => item.id === id
+        );
+
+    if (!proposta) {
+
+        alert(
+            'Proposta não encontrada.'
+        );
+
+        return;
+    }
+
+    editingOrcamentoId = id;
+
+    orcamentoAnoSelecionado =
+        Number(proposta.ano);
+
+    document.getElementById(
+        'orcamento-popup-titulo'
+    ).textContent =
+        '✏️ Editar Proposta';
+
+    document.getElementById(
+        'orc-ano'
+    ).value =
+        proposta.ano || '';
+
+    document.getElementById(
+        'orc-num'
+    ).value =
+        proposta.num || '';
+
+    document.getElementById(
+        'orc-designacao'
+    ).value =
+        proposta.designacao || '';
+
+    document.getElementById(
+        'orc-prazo'
+    ).value =
+        proposta.prazoEntrega || '';
+
+    document.getElementById(
+        'orc-data-rececao'
+    ).value =
+        proposta.dataRececao || '';
+
+    document.getElementById(
+        'orc-data-apresentacao'
+    ).value =
+        proposta.dataApresentacao || '';
+
+    document.getElementById(
+        'orc-tempo-utilizado'
+    ).value =
+        proposta.tempoUtilizado ?? '';
+
+    document.getElementById(
+        'orc-observacoes'
+    ).value =
+        proposta.observacoes || '';
+
+    document.getElementById(
+        'orc-estado'
+    ).value =
+        proposta.estado || '';
+
+    document.getElementById(
+        'orc-link'
+    ).value =
+        proposta.link || '';
+
+    atualizarListaObrasOrcamento();
+
+    document.getElementById(
+        'orc-obra'
+    ).value =
+        proposta.obraId || '';
+
+    document.getElementById(
+        'orc-preco-custo'
+    ).value =
+        proposta.precoCusto ?? '';
+
+    document.getElementById(
+        'orc-preco-venda'
+    ).value =
+        proposta.precoVenda ?? '';
+
+    calcularTempoProposta();
+    calcularValoresProposta();
+
+    const popup =
+        document.getElementById(
+            'orcamento-popup'
+        );
+
+    const backdrop =
+        document.getElementById(
+            'form-popup-backdrop'
+        );
+
+    popup.style.display = 'block';
+
+    backdrop.classList.add('active');
+
+    document.body.classList.add(
+        'form-popup-open'
+    );
+}
+
+function atualizarListaObrasOrcamento() {
+
+    const select =
+        document.getElementById(
+            'orc-obra'
+        );
+
+    if (!select) return;
+
+    const valorAtual =
+        select.value;
+
+    const obras =
+        DB.obras
+            .filter(obra =>
+                obra.est === 'Em Execução'
+            )
+            .sort((a, b) =>
+                String(a.nom || '')
+                    .localeCompare(
+                        String(b.nom || '')
+                    )
+            );
+
+    select.innerHTML = `
+        <option value="">
+            Sem obra associada
+        </option>
+    `;
+
+    obras.forEach(obra => {
+
+        const option =
+            document.createElement('option');
+
+        option.value =
+            obra.id;
+
+        option.textContent =
+            `${obra.num || ''} - ${obra.nom || ''}`;
+
+        select.appendChild(option);
+    });
+
+    if (
+        obras.some(
+            obra => obra.id === valorAtual
+        )
+    ) {
+        select.value = valorAtual;
+    }
+}
+
+function calcularTempoProposta() {
+
+    const inicio =
+        document.getElementById(
+            'orc-data-rececao'
+        ).value;
+
+    const fim =
+        document.getElementById(
+            'orc-data-apresentacao'
+        ).value;
+
+    const campo =
+        document.getElementById(
+            'orc-tempo-utilizado'
+        );
+
+    if (!inicio || !fim) {
+
+        campo.value = '';
+
+        return;
+    }
+
+    const dataInicio =
+        new Date(
+            `${inicio}T00:00:00`
+        );
+
+    const dataFim =
+        new Date(
+            `${fim}T00:00:00`
+        );
+
+    if (
+        dataFim < dataInicio
+    ) {
+
+        campo.value = '';
+
+        return;
+    }
+
+    let total = 0;
+
+    const dataAtual =
+        new Date(dataInicio);
+
+    while (
+        dataAtual <= dataFim
+    ) {
+
+        const dia =
+            dataAtual.getDay();
+
+        if (
+            dia !== 0 &&
+            dia !== 6
+        ) {
+
+            total++;
+        }
+
+        dataAtual.setDate(
+            dataAtual.getDate() + 1
+        );
+    }
+
+    campo.value = total;
+}
+
+function calcularValoresProposta() {
+
+    const precoCusto =
+        Number(
+            document.getElementById(
+                'orc-preco-custo'
+            ).value
+        ) || 0;
+
+    const precoVenda =
+        Number(
+            document.getElementById(
+                'orc-preco-venda'
+            ).value
+        ) || 0;
+
+    const k =
+        precoVenda - precoCusto;
+
+    const percK =
+        precoCusto !== 0
+            ? (k / precoCusto) * 100
+            : 0;
+
+    document.getElementById(
+        'orc-k'
+    ).value =
+        k.toFixed(2);
+
+    document.getElementById(
+        'orc-perc-k'
+    ).value =
+        `${percK.toFixed(2)}%`;
+}	
+
+function fecharPopupOrcamento() {
+
+    const popup =
+        document.getElementById(
+            'orcamento-popup'
+        );
+
+    const backdrop =
+        document.getElementById(
+            'form-popup-backdrop'
+        );
+
+    if (popup) {
+        popup.style.display = 'none';
+    }
+
+    if (backdrop) {
+        backdrop.classList.remove('active');
+    }
+
+    document.body.classList.remove(
+        'form-popup-open'
+    );
+
+    editingOrcamentoId = null;
+}	
+
+async function guardarPropostaOrcamento() {
+
+    if (!user) {
+
+        alert(
+            'É necessário iniciar sessão.'
+        );
+
+        return;
+    }
+
+    const ano =
+        Number(
+            document.getElementById(
+                'orc-ano'
+            ).value
+        );
+
+    const num =
+        document.getElementById(
+            'orc-num'
+        ).value.trim();
+
+    const designacao =
+        document.getElementById(
+            'orc-designacao'
+        ).value.trim();
+
+    const estado =
+        document.getElementById(
+            'orc-estado'
+        ).value;
+
+    if (!ano) {
+
+        alert(
+            'O ano é obrigatório.'
+        );
+
+        return;
+    }
+
+    if (!num) {
+
+        alert(
+            'O Nº Proposta é obrigatório.'
+        );
+
+        return;
+    }
+
+    if (!designacao) {
+
+        alert(
+            'A Designação é obrigatória.'
+        );
+
+        return;
+    }
+
+    if (!estado) {
+
+        alert(
+            'Selecione o Estado do processo.'
+        );
+
+        return;
+    }
+
+    calcularTempoProposta();
+    calcularValoresProposta();
+
+    const obraId =
+        document.getElementById(
+            'orc-obra'
+        ).value;
+
+    const obra =
+        DB.obras.find(
+            item => item.id === obraId
+        );
+
+    const precoCusto =
+        Number(
+            document.getElementById(
+                'orc-preco-custo'
+            ).value
+        ) || 0;
+
+    const precoVenda =
+        Number(
+            document.getElementById(
+                'orc-preco-venda'
+            ).value
+        ) || 0;
+
+    const k =
+        precoVenda - precoCusto;
+
+    const percK =
+        precoCusto !== 0
+            ? (k / precoCusto) * 100
+            : 0;
+
+    const data = {
+
+        id:
+            editingOrcamentoId ||
+            `ORC_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+
+        ano,
+
+        num,
+
+        designacao,
+
+        prazoEntrega:
+            document.getElementById(
+                'orc-prazo'
+            ).value.trim(),
+
+        dataRececao:
+            document.getElementById(
+                'orc-data-rececao'
+            ).value,
+
+        dataApresentacao:
+            document.getElementById(
+                'orc-data-apresentacao'
+            ).value,
+
+        tempoUtilizado:
+            Number(
+                document.getElementById(
+                    'orc-tempo-utilizado'
+                ).value
+            ) || 0,
+
+        observacoes:
+            document.getElementById(
+                'orc-observacoes'
+            ).value.trim(),
+
+        estado,
+
+        link:
+            document.getElementById(
+                'orc-link'
+            ).value.trim(),
+
+        obraId:
+            obraId || '',
+
+        obraNom:
+            obra
+                ? `${obra.num || ''} - ${obra.nom || ''}`
+                : '',
+
+        precoCusto,
+
+        precoVenda,
+
+        k,
+
+        percK,
+
+        utilizadorCriacao:
+            editingOrcamentoId
+                ? undefined
+                : user.u,
+
+        dataCriacao:
+            editingOrcamentoId
+                ? undefined
+                : new Date().toISOString(),
+
+        utilizadorEdicao:
+            editingOrcamentoId
+                ? user.u
+                : '',
+
+        dataEdicao:
+            editingOrcamentoId
+                ? new Date().toISOString()
+                : ''
+
+    };
+
+    try {
+
+        const ref =
+            editingOrcamentoId
+                ? db.ref(
+                    `orcamentos/${editingOrcamentoId}`
+                )
+                : db.ref(
+                    `orcamentos/${data.id}`
+                );
+
+        await ref.set(data);
+
+        alert(
+            editingOrcamentoId
+                ? 'Proposta atualizada com sucesso.'
+                : 'Proposta criada com sucesso.'
+        );
+
+        fecharPopupOrcamento();
+
+        renderOrcamentos();
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao guardar proposta:',
+            error
+        );
+
+        alert(
+            'Não foi possível guardar a proposta.'
+        );
+    }
+}
+	
 function showMod(mod) {
 
     currentMod = mod;
@@ -7679,6 +8357,295 @@ window.onload = () => {
 
 </script>
 
+<div
+    id="orcamento-popup"
+    style="
+        display:none;
+        position:fixed;
+        z-index:5001;
+        top:50%;
+        left:50%;
+        transform:translate(-50%, -50%);
+        width:min(1000px, calc(100vw - 40px));
+        max-height:calc(100vh - 40px);
+        overflow-y:auto;
+        box-sizing:border-box;
+        background:white;
+        border:1px solid #d5e1ee;
+        border-radius:12px;
+        padding:20px;
+        box-shadow:0 20px 60px rgba(51,65,85,0.22);
+    "
+>
+
+    <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin-bottom:15px;
+    ">
+
+        <h3
+            id="orcamento-popup-titulo"
+            style="margin:0; color:#475569;"
+        >
+            📋 Nova Proposta
+        </h3>
+
+        <button
+            type="button"
+            onclick="fecharPopupOrcamento()"
+            style="
+                border:1px solid #e2d4d6;
+                background:#f7e9eb;
+                color:#7a5056;
+                width:34px;
+                height:34px;
+                border-radius:8px;
+                cursor:pointer;
+                font-size:16px;
+                font-weight:bold;
+            "
+        >
+            ✕
+        </button>
+
+    </div>
+
+    <div class="grid">
+
+        <div>
+            <label>Ano *</label>
+
+            <input
+                type="number"
+                id="orc-ano"
+                min="2000"
+                max="2100"
+                step="1"
+                readonly
+            >
+        </div>
+
+        <div>
+            <label>Nº Proposta *</label>
+
+            <input
+                type="text"
+                id="orc-num"
+            >
+        </div>
+
+        <div class="full-w">
+            <label>Designação *</label>
+
+            <input
+                type="text"
+                id="orc-designacao"
+            >
+        </div>
+
+        <div>
+            <label>Prazo de entrega</label>
+
+            <input
+                type="text"
+                id="orc-prazo"
+                placeholder="Ex.: 30 dias"
+            >
+        </div>
+
+        <div>
+            <label>Data de receção da proposta</label>
+
+            <input
+    type="date"
+    id="orc-data-rececao"
+    onchange="calcularTempoProposta()"
+>
+        </div>
+
+        <div>
+            <label>Data de apresentação da proposta</label>
+
+            <input
+                type="date"
+                id="orc-data-apresentacao"
+                onchange="calcularTempoProposta()"
+            >
+        </div>
+
+        <div>
+            <label>Tempo utilizado (dias úteis)</label>
+
+            <input
+                type="number"
+                id="orc-tempo-utilizado"
+                readonly
+                style="background:#f1f5f9;"
+            >
+        </div>
+
+        <div class="full-w">
+            <label>Observações</label>
+
+            <textarea
+                id="orc-observacoes"
+                rows="3"
+            ></textarea>
+        </div>
+
+        <div>
+            <label>Estado do processo *</label>
+
+            <select id="orc-estado">
+                <option value="">
+                    Selecionar estado...
+                </option>
+
+                <option>
+                    O PROCESSO DE ANÁLISE NÃO FOI INICIADO
+                </option>
+
+                <option>
+                    EM CURSO (ROFREICRC)
+                </option>
+
+                <option>
+                    PENDENTE DE UM TERCEIRO (CLIENTE)
+                </option>
+
+                <option>
+                    PENDENTE DE UM TERCEIRO (FORNECEDOR)
+                </option>
+
+                <option>
+                    EM CURSO E PENDENTE DE UM TERCEIRO (CLIENTE)
+                </option>
+
+                <option>
+                    EM CURSO E PENDENTE DE UM TERCEIRO (FORNECEDOR)
+                </option>
+
+                <option>
+                    PROPOSTA ENVIADA AO CLIENTE
+                </option>
+
+                <option>
+                    PROPOSTA ADJUDICADA
+                </option>
+
+                <option>
+                    PROPOSTA NÃO ADJUDICADA
+                </option>
+
+                <option>
+                    NÃO APRESENTADO
+                </option>
+
+                <option>
+                    SEM EFEITO
+                </option>
+
+                <option>
+                    REVISÃO PENDENTE POR NUNO
+                </option>
+            </select>
+        </div>
+
+        <div>
+            <label>Ligação</label>
+
+            <input
+                type="text"
+                id="orc-link"
+                placeholder="Introduza a ligação..."
+            >
+        </div>
+
+        <div class="full-w">
+
+            <label>Obra</label>
+
+            <select id="orc-obra">
+                <option value="">
+                    Sem obra associada
+                </option>
+            </select>
+
+        </div>
+
+        <div>
+            <label>Preço de custo (€)</label>
+
+            <input
+                type="number"
+                id="orc-preco-custo"
+                step="0.01"
+                min="0"
+                oninput="calcularValoresProposta()"
+            >
+        </div>
+
+        <div>
+            <label>Preço de venda (€)</label>
+
+            <input
+                type="number"
+                id="orc-preco-venda"
+                step="0.01"
+                min="0"
+                oninput="calcularValoresProposta()"
+            >
+        </div>
+
+        <div>
+            <label>K (€)</label>
+
+            <input
+                type="number"
+                id="orc-k"
+                readonly
+                style="background:#f1f5f9;"
+            >
+        </div>
+
+        <div>
+            <label>% K</label>
+
+            <input
+                type="text"
+                id="orc-perc-k"
+                readonly
+                style="background:#f1f5f9;"
+            >
+        </div>
+
+    </div>
+
+    <div class="btn-row-form">
+
+        <button
+            type="button"
+            class="btn-main"
+            onclick="guardarPropostaOrcamento()"
+        >
+            💾 Guardar Proposta
+        </button>
+
+        <button
+            type="button"
+            class="btn-cancel"
+            style="display:block;"
+            onclick="fecharPopupOrcamento()"
+        >
+            Cancelar
+        </button>
+
+    </div>
+
+</div>
+	
 <div
     id="form-popup-backdrop"
     class="form-popup-backdrop"
