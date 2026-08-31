@@ -2502,6 +2502,13 @@ function renderAnosOrcamentos() {
 
     DB.orcamentosAnos.forEach(item => {
 
+        const wrapper =
+            document.createElement('div');
+
+        wrapper.style.display = 'flex';
+        wrapper.style.gap = '4px';
+        wrapper.style.alignItems = 'center';
+
         const button =
             document.createElement('button');
 
@@ -2510,10 +2517,50 @@ function renderAnosOrcamentos() {
         button.innerHTML =
             `📅 ${item.ano}`;
 
+        button.style.flex = '1';
+
         button.onclick = () =>
             abrirAnoOrcamento(item.ano);
 
-        container.appendChild(button);
+        wrapper.appendChild(button);
+
+        if (
+            user &&
+            user.role === 'Administrador'
+        ) {
+
+            const deleteButton =
+                document.createElement('button');
+
+            deleteButton.type = 'button';
+
+            deleteButton.innerHTML = '🗑️';
+
+            deleteButton.title =
+                `Eliminar ano ${item.ano}`;
+
+            deleteButton.style.width = '38px';
+            deleteButton.style.flex = '0 0 38px';
+            deleteButton.style.background = '#f7e4e5';
+            deleteButton.style.border =
+                '1px solid #ead1d4';
+            deleteButton.style.color = '#7a5056';
+            deleteButton.style.borderRadius = '9px';
+            deleteButton.style.cursor = 'pointer';
+
+            deleteButton.onclick = event => {
+
+                event.stopPropagation();
+
+                eliminarAnoOrcamento(item.ano);
+            };
+
+            wrapper.appendChild(
+                deleteButton
+            );
+        }
+
+        container.appendChild(wrapper);
     });
 }
 
@@ -2588,6 +2635,65 @@ function mostrarListaPropostas() {
     showMod('orcamentos');
 }
 
+function eliminarAnoOrcamento(ano) {
+
+    if (
+        !user ||
+        user.role !== 'Administrador'
+    ) {
+
+        alert(
+            'Apenas um Administrador pode eliminar um ano.'
+        );
+
+        return;
+    }
+
+    const propostasDoAno =
+        DB.orcamentos.filter(
+            item => Number(item.ano) === Number(ano)
+        );
+
+    let mensagem =
+        `Tem a certeza de que pretende eliminar o ano ${ano}?`;
+
+    if (propostasDoAno.length > 0) {
+
+        mensagem +=
+            `\n\nExistem ${propostasDoAno.length} proposta(s) associada(s) a este ano.`;
+
+        mensagem +=
+            '\n\nA eliminação do ano NÃO irá eliminar as propostas.';
+    }
+
+    if (!confirm(mensagem)) {
+        return;
+    }
+
+    const id =
+        `ANO_${ano}`;
+
+    db.ref(
+        `orcamentos/anos/${id}`
+    ).remove()
+    .then(() => {
+
+        alert(
+            `O ano ${ano} foi eliminado com sucesso.`
+        );
+
+    })
+    .catch(error => {
+
+        console.error(error);
+
+        alert(
+            'Não foi possível eliminar o ano.'
+        );
+    });
+}
+
+
 function abrirAnoOrcamento(ano) {
 
     const menu =
@@ -2626,14 +2732,27 @@ function abrirNovoAnoOrcamento() {
     }
 
     const ano =
-        prompt(
-            'Introduza o ano que pretende criar:'
-        );
+    prompt(
+        'Introduza o ano que pretende criar:',
+        new Date().getFullYear()
+    );
 
-    if (ano === null) return;
+if (ano === null) return;
 
-    const anoNumero =
-        Number(String(ano).trim());
+const valorAno =
+    String(ano).trim();
+
+if (!/^\d+$/.test(valorAno)) {
+
+    alert(
+        'O ano deve conter apenas números.'
+    );
+
+    return;
+}
+
+const anoNumero =
+    Number(valorAno);
 
     if (
         !Number.isInteger(anoNumero) ||
