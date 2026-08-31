@@ -2921,7 +2921,7 @@ function eliminarAnoOrcamento(ano) {
 }
 
 
-function abrirAnoOrcamento(ano) {
+async function abrirAnoOrcamento(ano) {
 
     orcamentoAnoSelecionado =
         Number(ano);
@@ -2944,9 +2944,32 @@ function abrirAnoOrcamento(ano) {
         lista.classList.add('menu-open');
     }
 
-    renderOrcamentos();
-
     showMod('orcamentos');
+
+    try {
+
+        const snap =
+            await db.ref('orcamentos').once('value');
+
+        const dados =
+            snap.val() || {};
+
+        DB.orcamentos =
+            Object.entries(dados)
+                .map(([id, valor]) => ({
+                    id,
+                    ...valor
+                }));
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao carregar as propostas:',
+            error
+        );
+    }
+
+    renderOrcamentos();
 }
 
 function abrirNovoAnoOrcamento() {
