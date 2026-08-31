@@ -620,6 +620,13 @@
     text-align: right;
 }
 
+.orcamentos-tabela .monitorizacao-cell {
+    background: #FFF2CC !important;
+    color: #475569;
+    font-weight: 600;
+    text-align: center;
+}
+
 .orcamentos-tabela .estado-cell {
     font-weight: 600;
     min-width: 240px;
@@ -3356,10 +3363,260 @@ function renderOrcamentos() {
                     ? totalK / totalCusto * 100
                     : null;
 
+            let monitorizacaoA = null;
+
+            let monitorizacaoB = null;
+
+            if (
+                estado ===
+                'PROPOSTA ADJUDICADA'
+            ) {
+
+                const estadoAdjudicada =
+                    propostas.filter(
+                        p =>
+                            p.estado ===
+                            'PROPOSTA ADJUDICADA'
+                    ).length;
+
+                const estadoNaoAdjudicada =
+                    propostas.filter(
+                        p =>
+                            p.estado ===
+                            'PROPOSTA NÃO ADJUDICADA'
+                    ).length;
+
+                const totalMonitorizacao =
+                    estadoAdjudicada +
+                    estadoNaoAdjudicada;
+
+                monitorizacaoA =
+                    totalMonitorizacao > 0
+                        ? estadoAdjudicada /
+                          totalMonitorizacao *
+                          100
+                        : null;
+            }
+
+            if (
+                estado ===
+                'PROPOSTA NÃO ADJUDICADA'
+            ) {
+
+                const estadoAdjudicada =
+                    propostas.filter(
+                        p =>
+                            p.estado ===
+                            'PROPOSTA ADJUDICADA'
+                    ).length;
+
+                const estadoNaoAdjudicada =
+                    propostas.filter(
+                        p =>
+                            p.estado ===
+                            'PROPOSTA NÃO ADJUDICADA'
+                    ).length;
+
+                const totalMonitorizacao =
+                    estadoAdjudicada +
+                    estadoNaoAdjudicada;
+
+                monitorizacaoA =
+                    totalMonitorizacao > 0
+                        ? estadoNaoAdjudicada /
+                          totalMonitorizacao *
+                          100
+                        : null;
+            }
+
+            if (
+                estado ===
+                'NÃO APRESENTADO'
+            ) {
+
+                const estadoAdjudicada =
+                    propostas.filter(
+                        p =>
+                            p.estado ===
+                            'PROPOSTA ADJUDICADA'
+                    ).length;
+
+                const estadoNaoAdjudicada =
+                    propostas.filter(
+                        p =>
+                            p.estado ===
+                            'PROPOSTA NÃO ADJUDICADA'
+                    ).length;
+
+                const totalMonitorizacao =
+                    estadoAdjudicada +
+                    estadoNaoAdjudicada;
+
+                monitorizacaoA =
+                    totalMonitorizacao > 0
+                        ? 100
+                        : null;
+            }
+
+            if (
+                estado ===
+                'PROPOSTA ADJUDICADA'
+            ) {
+
+                const vendaAdjudicada =
+                    propostas
+                        .filter(
+                            p =>
+                                p.estado ===
+                                'PROPOSTA ADJUDICADA'
+                        )
+                        .reduce(
+                            (total, p) =>
+                                total +
+                                (
+                                    valorNumerico(
+                                        p.precoVenda
+                                    ) || 0
+                                ),
+                            0
+                        );
+
+                const vendaNaoAdjudicada =
+                    propostas
+                        .filter(
+                            p =>
+                                p.estado ===
+                                'PROPOSTA NÃO ADJUDICADA'
+                        )
+                        .reduce(
+                            (total, p) =>
+                                total +
+                                (
+                                    valorNumerico(
+                                        p.precoVenda
+                                    ) || 0
+                                ),
+                            0
+                        );
+
+                const totalVendaMonitorizacao =
+                    vendaAdjudicada +
+                    vendaNaoAdjudicada;
+
+                monitorizacaoB =
+                    totalVendaMonitorizacao > 0
+                        ? vendaAdjudicada /
+                          totalVendaMonitorizacao *
+                          100
+                        : null;
+            }
+
+            if (
+                estado ===
+                'PROPOSTA NÃO ADJUDICADA'
+            ) {
+
+                const vendaAdjudicada =
+                    propostas
+                        .filter(
+                            p =>
+                                p.estado ===
+                                'PROPOSTA ADJUDICADA'
+                        )
+                        .reduce(
+                            (total, p) =>
+                                total +
+                                (
+                                    valorNumerico(
+                                        p.precoVenda
+                                    ) || 0
+                                ),
+                            0
+                        );
+
+                const vendaNaoAdjudicada =
+                    propostas
+                        .filter(
+                            p =>
+                                p.estado ===
+                                'PROPOSTA NÃO ADJUDICADA'
+                        )
+                        .reduce(
+                            (total, p) =>
+                                total +
+                                (
+                                    valorNumerico(
+                                        p.precoVenda
+                                    ) || 0
+                                ),
+                            0
+                        );
+
+                const totalVendaMonitorizacao =
+                    vendaAdjudicada +
+                    vendaNaoAdjudicada;
+
+                monitorizacaoB =
+                    totalVendaMonitorizacao > 0
+                        ? vendaNaoAdjudicada /
+                          totalVendaMonitorizacao *
+                          100
+                        : null;
+            }
+
+            if (
+                estado ===
+                'NÃO APRESENTADO'
+            ) {
+
+                const vendaAdjudicada =
+                    propostas
+                        .filter(
+                            p =>
+                                p.estado ===
+                                'PROPOSTA ADJUDICADA'
+                        )
+                        .reduce(
+                            (total, p) =>
+                                total +
+                                (
+                                    valorNumerico(
+                                        p.precoVenda
+                                    ) || 0
+                                ),
+                            0
+                        );
+
+                const vendaNaoAdjudicada =
+                    propostas
+                        .filter(
+                            p =>
+                                p.estado ===
+                                'PROPOSTA NÃO ADJUDICADA'
+                        )
+                        .reduce(
+                            (total, p) =>
+                                total +
+                                (
+                                    valorNumerico(
+                                        p.precoVenda
+                                    ) || 0
+                                ),
+                            0
+                        );
+
+                monitorizacaoB =
+                    (
+                        vendaAdjudicada +
+                        vendaNaoAdjudicada
+                    ) > 0
+                        ? 100
+                        : null;
+            }
+
             return {
 
                 estado,
-
                 quantidade,
 
                 percentagemGeral,
@@ -3372,11 +3629,59 @@ function renderOrcamentos() {
 
                 totalVenda,
 
+                monitorizacaoA,
+
+                monitorizacaoB,
+
                 totalK,
 
                 percentagemK
             };
-        });
+                });
+
+
+    const estadosComValores =
+        [
+            'PROPOSTA ENVIADA AO CLIENTE',
+            'PROPOSTA ADJUDICADA',
+            'PROPOSTA NÃO ADJUDICADA'
+        ];
+
+    const propostasComValores =
+        propostas.filter(
+            proposta =>
+                estadosComValores.includes(
+                    proposta.estado
+                )
+        );
+
+    const totalPrecoCusto =
+        propostasComValores.reduce(
+            (total, proposta) =>
+                total +
+                (
+                    valorNumerico(
+                        proposta.precoCusto
+                    ) || 0
+                ),
+            0
+        );
+
+    const totalPrecoVenda =
+        propostasComValores.reduce(
+            (total, proposta) =>
+                total +
+                (
+                    valorNumerico(
+                        proposta.precoVenda
+                    ) || 0
+                ),
+            0
+        );
+
+    const totalKGlobal =
+        totalPrecoVenda -
+        totalPrecoCusto;
 
 
     // =====================================================
@@ -3508,6 +3813,18 @@ function renderOrcamentos() {
                     ${''}
                 </td>
 
+                <td
+                    class="numero monitorizacao-cell"
+                >
+                    ${
+                        item.monitorizacaoA !== null
+                            ? formatarPercentagem(
+                                item.monitorizacaoA
+                              )
+                            : ''
+                    }
+                </td>
+
                 <td class="numero">
                     ${
                         item.totalCusto > 0
@@ -3528,8 +3845,16 @@ function renderOrcamentos() {
                     }
                 </td>
 
-                <td class="numero">
-                    ${''}
+                <td
+                    class="numero monitorizacao-cell"
+                >
+                    ${
+                        item.monitorizacaoB !== null
+                            ? formatarPercentagem(
+                                item.monitorizacaoB
+                              )
+                            : ''
+                    }
                 </td>
 
                 <td class="numero">
@@ -3601,9 +3926,39 @@ function renderOrcamentos() {
             </td>
 
             <td></td>
+
+            <td class="numero">
+                ${
+                    totalPrecoCusto > 0
+                        ? formatarMoeda(
+                            totalPrecoCusto
+                          )
+                        : '0,00 €'
+                }
+            </td>
+
+            <td class="numero">
+                ${
+                    totalPrecoVenda > 0
+                        ? formatarMoeda(
+                            totalPrecoVenda
+                          )
+                        : '0,00 €'
+                }
+            </td>
+
             <td></td>
-            <td></td>
-            <td></td>
+
+            <td class="numero">
+                ${
+                    totalKGlobal !== null
+                        ? formatarMoeda(
+                            totalKGlobal
+                          )
+                        : '0,00 €'
+                }
+            </td>
+
             <td></td>
 
         </tr>
