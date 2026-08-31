@@ -556,6 +556,182 @@
             padding: 4px !important;
             font-size: 10px !important;
         }
+	/* =========================================================
+   ORÇAMENTOS — MATRIZ DE PROPOSTAS
+   ========================================================= */
+
+.orcamentos-resumo {
+    margin-bottom: 18px;
+    background: #ffffff;
+    border: 1px solid #dbe3ec;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 3px 12px rgba(71,85,105,0.06);
+}
+
+.orcamentos-resumo-titulo {
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #475569;
+    background: #eef3f8;
+    border-bottom: 1px solid #dbe3ec;
+}
+
+.orcamentos-tabela-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.orcamentos-tabela {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.orcamentos-tabela th {
+    padding: 8px 7px;
+    background: #e8eef5;
+    color: #475569;
+    border: 1px solid #d5dee8;
+    font-weight: 700;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.orcamentos-tabela td {
+    padding: 7px 8px;
+    border: 1px solid #e1e7ee;
+    color: #475569;
+    vertical-align: middle;
+}
+
+.orcamentos-tabela.propostas td {
+    white-space: nowrap;
+}
+
+.orcamentos-tabela.propostas td:nth-child(2),
+.orcamentos-tabela.propostas td:nth-child(7) {
+    white-space: normal;
+    min-width: 160px;
+}
+
+.orcamentos-tabela .numero {
+    text-align: right;
+}
+
+.orcamentos-tabela .estado-cell {
+    font-weight: 600;
+    min-width: 240px;
+}
+
+.orcamentos-tabela tbody tr {
+    transition:
+        filter 0.15s ease,
+        transform 0.15s ease;
+}
+
+.orcamentos-tabela.propostas tbody tr:hover {
+    filter: brightness(0.97);
+}
+
+.orcamentos-tabela .total-row {
+    background: #edf2f7 !important;
+    font-weight: 700;
+}
+
+.orcamentos-tabela .sem-registos {
+    text-align: center;
+    padding: 25px;
+    color: #64748b;
+}
+
+/* =========================================================
+   CORES DOS ESTADOS
+   ========================================================= */
+
+.estado-nao-iniciado {
+    background: #f4f5f6;
+}
+
+.estado-em-curso {
+    background: #edf5fb;
+}
+
+.estado-pendente-cliente {
+    background: #fff5e8;
+}
+
+.estado-pendente-fornecedor {
+    background: #f8f0e8;
+}
+
+.estado-curso-pendente-cliente {
+    background: #fff1e3;
+}
+
+.estado-curso-pendente-fornecedor {
+    background: #f3eee8;
+}
+
+.estado-enviada {
+    background: #eef5ed;
+}
+
+.estado-adjudicada {
+    background: #e8f4ed;
+}
+
+.estado-nao-adjudicada {
+    background: #f8eded;
+}
+
+.estado-nao-apresentado {
+    background: #f1f1f1;
+}
+
+.estado-sem-efeito {
+    background: #f4eeee;
+}
+
+.estado-revisao {
+    background: #f1eef7;
+}
+
+/* =========================================================
+   BOTÕES DA TABELA
+   ========================================================= */
+
+.orcamentos-tabela .acoes {
+    white-space: nowrap;
+    text-align: center;
+    min-width: 75px;
+}
+
+.orcamentos-tabela .acoes button {
+    border: 0;
+    border-radius: 6px;
+    padding: 5px 7px;
+    cursor: pointer;
+    margin: 0 2px;
+    transition:
+        transform 0.15s ease,
+        filter 0.15s ease;
+}
+
+.orcamentos-tabela .acoes button:hover {
+    transform: scale(1.08);
+    filter: brightness(0.96);
+}
+
+.orcamentos-tabela .b-edit {
+    background: #e8f0f7;
+}
+
+.orcamentos-tabela .b-del {
+    background: #f5e5e6;
+}
+	
     </style>
 	<link rel="icon" href="data:,">
 </head>
@@ -2871,9 +3047,7 @@ const anoNumero =
 function renderOrcamentos() {
 
     const container =
-        document.getElementById(
-            'list-orcamentos'
-        );
+        document.getElementById('list-orcamentos');
 
     if (!container) return;
 
@@ -2882,261 +3056,794 @@ function renderOrcamentos() {
             ? [...DB.orcamentos]
             : [];
 
+    // Filtrar pelo ano selecionado
     if (orcamentoAnoSelecionado !== null) {
 
-        propostas =
-            propostas.filter(
-                proposta =>
-                    Number(proposta.ano) ===
-                    Number(orcamentoAnoSelecionado)
-            );
+        propostas = propostas.filter(
+            proposta =>
+                Number(proposta.ano) ===
+                Number(orcamentoAnoSelecionado)
+        );
     }
 
-    propostas.sort((a, b) => {
-
-        return String(b.num || '').localeCompare(
-            String(a.num || ''),
+    // Ordem da matriz: Nº Proposta
+    propostas.sort((a, b) =>
+        String(a.num || '').localeCompare(
+            String(b.num || ''),
             undefined,
             {
                 numeric: true,
                 sensitivity: 'base'
             }
-        );
+        )
+    );
+
+    const estados = [
+
+        'O PROCESSO DE ANÁLISE NÃO FOI INICIADO',
+
+        'EM CURSO (ROFREICRC)',
+
+        'PENDENTE DE UM TERCEIRO (CLIENTE)',
+
+        'PENDENTE DE UM TERCEIRO (FORNECEDOR)',
+
+        'EM CURSO E PENDENTE DE UM TERCEIRO (CLIENTE)',
+
+        'EM CURSO E PENDENTE DE UM TERCEIRO (FORNECEDOR)',
+
+        'PROPOSTA ENVIADA AO CLIENTE',
+
+        'PROPOSTA ADJUDICADA',
+
+        'PROPOSTA NÃO ADJUDICADA',
+
+        'NÃO APRESENTADO',
+
+        'SEM EFEITO',
+
+        'REVISÃO PENDENTE POR NUNO'
+    ];
+
+
+    // =====================================================
+    // FUNÇÕES AUXILIARES
+    // =====================================================
+
+    function formatarMoeda(valor) {
+
+        if (
+            valor === '' ||
+            valor === null ||
+            valor === undefined
+        ) {
+            return '';
+        }
+
+        const numero = Number(valor);
+
+        if (!Number.isFinite(numero)) {
+            return '';
+        }
+
+        return numero.toLocaleString(
+            'pt-PT',
+            {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }
+        ) + ' €';
+    }
+
+
+    function formatarPercentagem(valor) {
+
+        if (
+            valor === '' ||
+            valor === null ||
+            valor === undefined ||
+            !Number.isFinite(Number(valor))
+        ) {
+            return '-';
+        }
+
+        return Number(valor).toLocaleString(
+            'pt-PT',
+            {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }
+        ) + '%';
+    }
+
+
+    function valorNumerico(valor) {
+
+        if (
+            valor === '' ||
+            valor === null ||
+            valor === undefined
+        ) {
+            return null;
+        }
+
+        const numero = Number(valor);
+
+        return Number.isFinite(numero)
+            ? numero
+            : null;
+    }
+
+
+    function estadoClasse(estado) {
+
+        const mapa = {
+
+            'O PROCESSO DE ANÁLISE NÃO FOI INICIADO':
+                'estado-nao-iniciado',
+
+            'EM CURSO (ROFREICRC)':
+                'estado-em-curso',
+
+            'PENDENTE DE UM TERCEIRO (CLIENTE)':
+                'estado-pendente-cliente',
+
+            'PENDENTE DE UM TERCEIRO (FORNECEDOR)':
+                'estado-pendente-fornecedor',
+
+            'EM CURSO E PENDENTE DE UM TERCEIRO (CLIENTE)':
+                'estado-curso-pendente-cliente',
+
+            'EM CURSO E PENDENTE DE UM TERCEIRO (FORNECEDOR)':
+                'estado-curso-pendente-fornecedor',
+
+            'PROPOSTA ENVIADA AO CLIENTE':
+                'estado-enviada',
+
+            'PROPOSTA ADJUDICADA':
+                'estado-adjudicada',
+
+            'PROPOSTA NÃO ADJUDICADA':
+                'estado-nao-adjudicada',
+
+            'NÃO APRESENTADO':
+                'estado-nao-apresentado',
+
+            'SEM EFEITO':
+                'estado-sem-efeito',
+
+            'REVISÃO PENDENTE POR NUNO':
+                'estado-revisao'
+        };
+
+        return mapa[estado] || '';
+    }
+
+
+    // =====================================================
+    // RESUMO DOS ESTADOS
+    // =====================================================
+
+    const totalPropostas = propostas.length;
+
+    let totalExecutadas = 0;
+
+    const resumoEstados =
+        estados.map(estado => {
+
+            const propostasEstado =
+                propostas.filter(
+                    p => p.estado === estado
+                );
+
+            const quantidade =
+                propostasEstado.length;
+
+            const percentagemGeral =
+                totalPropostas > 0
+                    ? quantidade / totalPropostas * 100
+                    : null;
+
+            /*
+             * Consideramos executadas as propostas
+             * que chegaram a:
+             *
+             * PROPOSTA ENVIADA AO CLIENTE
+             * PROPOSTA ADJUDICADA
+             * PROPOSTA NÃO ADJUDICADA
+             */
+
+            const permiteExecutada =
+                estado ===
+                    'PROPOSTA ENVIADA AO CLIENTE' ||
+                estado ===
+                    'PROPOSTA ADJUDICADA' ||
+                estado ===
+                    'PROPOSTA NÃO ADJUDICADA';
+
+            const quantidadeExecutada =
+                permiteExecutada
+                    ? quantidade
+                    : null;
+
+            if (quantidadeExecutada !== null) {
+                totalExecutadas += quantidadeExecutada;
+            }
+
+            const percentagemExecutada =
+                quantidadeExecutada !== null &&
+                quantidade > 0
+                    ? quantidadeExecutada /
+                      quantidade * 100
+                    : null;
+
+            const valores =
+                propostasEstado
+                    .filter(
+                        p =>
+                            p.precoCusto !== '' &&
+                            p.precoCusto !== null &&
+                            p.precoCusto !== undefined
+                    )
+                    .map(
+                        p => Number(p.precoCusto)
+                    )
+                    .filter(
+                        v => Number.isFinite(v)
+                    );
+
+            const valoresVenda =
+                propostasEstado
+                    .filter(
+                        p =>
+                            p.precoVenda !== '' &&
+                            p.precoVenda !== null &&
+                            p.precoVenda !== undefined
+                    )
+                    .map(
+                        p => Number(p.precoVenda)
+                    )
+                    .filter(
+                        v => Number.isFinite(v)
+                    );
+
+            const totalCusto =
+                valores.reduce(
+                    (total, valor) =>
+                        total + valor,
+                    0
+                );
+
+            const totalVenda =
+                valoresVenda.reduce(
+                    (total, valor) =>
+                        total + valor,
+                    0
+                );
+
+            const totalK =
+                valores.length > 0 &&
+                valoresVenda.length > 0
+                    ? totalVenda - totalCusto
+                    : null;
+
+            const percentagemK =
+                totalCusto &&
+                totalK !== null
+                    ? totalK / totalCusto * 100
+                    : null;
+
+            return {
+
+                estado,
+
+                quantidade,
+
+                percentagemGeral,
+
+                quantidadeExecutada,
+
+                percentagemExecutada,
+
+                totalCusto,
+
+                totalVenda,
+
+                totalK,
+
+                percentagemK
+            };
+        });
+
+
+    // =====================================================
+    // RESUMO HTML
+    // =====================================================
+
+    let html = `
+
+        <div class="orcamentos-resumo">
+
+            <div class="orcamentos-resumo-titulo">
+                PROPOSTAS — ANO
+                ${orcamentoAnoSelecionado ?? ''}
+            </div>
+
+            <div class="orcamentos-tabela-wrapper">
+
+                <table class="orcamentos-tabela resumo">
+
+                    <thead>
+
+                        <tr>
+
+                            <th rowspan="2">
+                                Estado
+                            </th>
+
+                            <th rowspan="2">
+                                Quant.
+                            </th>
+
+                            <th rowspan="2">
+                                % Geral
+                            </th>
+
+                            <th rowspan="2">
+                                Quant. Executada
+                            </th>
+
+                            <th rowspan="2">
+                                % Executado
+                            </th>
+
+                            <th colspan="3">
+                                Valores
+                            </th>
+
+                            <th rowspan="2">
+                                K
+                            </th>
+
+                            <th rowspan="2">
+                                % K
+                            </th>
+
+                        </tr>
+
+                        <tr>
+
+                            <th>
+                                PREÇO CUSTO
+                            </th>
+
+                            <th>
+                                PREÇO VENDA
+                            </th>
+
+                            <th>
+                                Propostas
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+    `;
+
+
+    resumoEstados.forEach(item => {
+
+        html += `
+
+            <tr class="${estadoClasse(item.estado)}">
+
+                <td class="estado-cell">
+                    ${item.estado}
+                </td>
+
+                <td class="numero">
+                    <strong>
+                        ${item.quantidade}
+                    </strong>
+                </td>
+
+                <td class="numero">
+                    ${
+                        item.percentagemGeral !== null
+                            ? formatarPercentagem(
+                                item.percentagemGeral
+                              )
+                            : '-'
+                    }
+                </td>
+
+                <td class="numero">
+                    ${
+                        item.quantidadeExecutada !== null
+                            ? `<strong>${item.quantidadeExecutada}</strong>`
+                            : ''
+                    }
+                </td>
+
+                <td class="numero">
+                    ${
+                        item.percentagemExecutada !== null
+                            ? formatarPercentagem(
+                                item.percentagemExecutada
+                              )
+                            : ''
+                    }
+                </td>
+
+                <td class="numero">
+                    ${
+                        item.totalCusto > 0
+                            ? formatarMoeda(
+                                item.totalCusto
+                              )
+                            : ''
+                    }
+                </td>
+
+                <td class="numero">
+                    ${
+                        item.totalVenda > 0
+                            ? formatarMoeda(
+                                item.totalVenda
+                              )
+                            : ''
+                    }
+                </td>
+
+                <td class="numero">
+                    ${item.quantidade > 0
+                        ? item.quantidade
+                        : ''}
+                </td>
+
+                <td class="numero">
+                    ${
+                        item.totalK !== null
+                            ? formatarMoeda(
+                                item.totalK
+                              )
+                            : ''
+                    }
+                </td>
+
+                <td class="numero">
+                    ${
+                        item.percentagemK !== null
+                            ? `<strong>${formatarPercentagem(
+                                item.percentagemK
+                              )}</strong>`
+                            : ''
+                    }
+                </td>
+
+            </tr>
+
+        `;
     });
+
+
+    html += `
+
+        <tr class="total-row">
+
+            <td>
+                <strong>
+                    TOTAL Propostas
+                </strong>
+            </td>
+
+            <td class="numero">
+                <strong>
+                    ${totalPropostas}
+                </strong>
+            </td>
+
+            <td class="numero">
+                ${
+                    totalPropostas > 0
+                        ? '100,00%'
+                        : '-'
+                }
+            </td>
+
+            <td class="numero">
+                <strong>
+                    ${totalExecutadas}
+                </strong>
+            </td>
+
+            <td class="numero">
+                ${
+                    totalPropostas > 0
+                        ? formatarPercentagem(
+                            totalExecutadas /
+                            totalPropostas *
+                            100
+                          )
+                        : '-'
+                }
+            </td>
+
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+
+        </tr>
+
+    </tbody>
+
+</table>
+
+</div>
+
+</div>
+    `;
+
+
+    // =====================================================
+    // TABELA PRINCIPAL DAS PROPOSTAS
+    // =====================================================
+
+    html += `
+
+        <div class="orcamentos-tabela-principal">
+
+            <div class="orcamentos-tabela-wrapper">
+
+                <table class="orcamentos-tabela propostas">
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Nº Proposta</th>
+
+                            <th>Designação</th>
+
+                            <th>Prazo de entrega</th>
+
+                            <th>Data de receção</th>
+
+                            <th>Data de apresentação</th>
+
+                            <th>Tempo utilizado</th>
+
+                            <th>Observações</th>
+
+                            <th>Estado do processo</th>
+
+                            <th>Ligação</th>
+
+                            <th>Obra</th>
+
+                            <th>Preço de custo</th>
+
+                            <th>Preço de venda</th>
+
+                            <th>K</th>
+
+                            <th>% K</th>
+
+                            <th>Ações</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+    `;
+
 
     if (!propostas.length) {
 
-        container.innerHTML = `
-            <div class="card">
+        html += `
 
-                <p style="
-                    margin:0;
-                    color:#64748b;
-                    text-align:center;
-                ">
+            <tr>
+
+                <td
+                    colspan="15"
+                    class="sem-registos"
+                >
                     Não existem propostas registadas
-                    ${orcamentoAnoSelecionado !== null
-                        ? `para o ano ${orcamentoAnoSelecionado}.`
-                        : '.'}
-                </p>
+                    para este ano.
+                </td>
 
-            </div>
+            </tr>
+
         `;
 
-        return;
-    }
+    } else {
 
-    container.innerHTML = '';
+        propostas.forEach(proposta => {
 
-    propostas.forEach(proposta => {
+            const precoCusto =
+                valorNumerico(
+                    proposta.precoCusto
+                );
 
-        const precoCusto =
-            Number(proposta.precoCusto || 0);
+            const precoVenda =
+                valorNumerico(
+                    proposta.precoVenda
+                );
 
-        const precoVenda =
-            Number(proposta.precoVenda || 0);
+            let k = null;
 
-        const k =
-            Number(proposta.k ?? (
-                precoVenda - precoCusto
-            ));
+            let percK = null;
 
-        const percK =
-            Number(
-                proposta.percK ??
-                (
-                    precoCusto !== 0
-                        ? (k / precoCusto) * 100
-                        : 0
-                )
-            );
+            if (
+                precoCusto !== null &&
+                precoVenda !== null
+            ) {
 
-        const card =
-            document.createElement('div');
+                k =
+                    precoVenda -
+                    precoCusto;
 
-        card.className = 'card';
+                if (precoCusto !== 0) {
 
-        card.innerHTML = `
-            <div
-                class="card-grid"
-                style="align-items:center;"
-            >
+                    percK =
+                        k /
+                        precoCusto *
+                        100;
+                }
+            }
 
-                <div>
-                    <b>Nº Proposta:</b>
-                    ${proposta.num || '---'}
-                </div>
+            html += `
 
-                <div>
-                    <b>Designação:</b>
-                    ${proposta.designacao || '---'}
-                </div>
-
-                <div>
-                    <b>Obra:</b>
-                    ${proposta.obraNom || '---'}
-                </div>
-
-                <div>
-                    <b>Estado:</b>
-                    ${proposta.estado || '---'}
-                </div>
-
-                <div>
-                    <b>Preço de custo:</b>
-                    ${
-                        proposta.precoCusto !== '' &&
-                        proposta.precoCusto !== null &&
-                        proposta.precoCusto !== undefined
-                            ? `€ ${precoCusto.toLocaleString(
-                                'pt-PT',
-                                {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                }
-                            )}`
-                            : '---'
-                    }
-                </div>
-
-                <div>
-                    <b>Preço de venda:</b>
-                    ${
-                        proposta.precoVenda !== '' &&
-                        proposta.precoVenda !== null &&
-                        proposta.precoVenda !== undefined
-                            ? `€ ${precoVenda.toLocaleString(
-                                'pt-PT',
-                                {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                }
-                            )}`
-                            : '---'
-                    }
-                </div>
-
-                <div>
-                    <b>K:</b>
-                    ${
-                        proposta.precoCusto !== '' &&
-                        proposta.precoVenda !== '' &&
-                        proposta.precoCusto !== null &&
-                        proposta.precoVenda !== null &&
-                        proposta.precoCusto !== undefined &&
-                        proposta.precoVenda !== undefined
-                            ? `€ ${k.toLocaleString(
-                                'pt-PT',
-                                {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                }
-                            )}`
-                            : '---'
-                    }
-                </div>
-
-                <div>
-                    <b>% K:</b>
-                    ${
-                        proposta.precoCusto !== '' &&
-                        proposta.precoVenda !== '' &&
-                        proposta.precoCusto !== null &&
-                        proposta.precoVenda !== null &&
-                        proposta.precoCusto !== undefined &&
-                        proposta.precoVenda !== undefined
-                            ? `${percK.toFixed(2)}%`
-                            : '---'
-                    }
-                </div>
-
-            </div>
-
-            <div class="meta">
-
-                <span>
-                    📅 Ano:
-                    ${proposta.ano || '---'}
-                </span>
-
-                <span>
-                    📅 Receção:
-                    ${proposta.dataRececao || '---'}
-                </span>
-
-                <span>
-                    📅 Apresentação:
-                    ${proposta.dataApresentacao || '---'}
-                </span>
-
-            </div>
-
-            <div class="actions">
-
-                <button
-                    type="button"
-                    class="b-edit"
-                    onclick="editarPropostaOrcamento('${proposta.id}')"
+                <tr
+                    class="proposta-row ${estadoClasse(
+                        proposta.estado
+                    )}"
                 >
-                    ✏️ Editar
-                </button>
 
-                <button
-                    type="button"
-                    class="b-del"
-                    onclick="eliminarPropostaOrcamento('${proposta.id}')"
-                >
-                    🗑️ Eliminar
-                </button>
+                    <td>
+                        <strong>
+                            ${proposta.num || ''}
+                        </strong>
+                    </td>
 
-            </div>
-        `;
+                    <td>
+                        ${proposta.designacao || ''}
+                    </td>
 
-        container.appendChild(card);
-    });
-}
+                    <td>
+                        ${proposta.prazoEntrega || ''}
+                    </td>
 
+                    <td>
+                        ${proposta.dataRececao || ''}
+                    </td>
 
-function mostrarVistaAnoOrcamento(ano) {
+                    <td>
+                        ${proposta.dataApresentacao || ''}
+                    </td>
 
-    showMod('orcamentos');
+                    <td class="numero">
+                        ${
+                            proposta.tempoUtilizado !==
+                            undefined &&
+                            proposta.tempoUtilizado !==
+                            null &&
+                            proposta.tempoUtilizado !== ''
+                                ? proposta.tempoUtilizado
+                                : ''
+                        }
+                    </td>
 
-    const titulo =
-        document.getElementById(
-            'orcamentos-vista-titulo'
-        );
+                    <td>
+                        ${proposta.observacoes || ''}
+                    </td>
 
-    if (titulo) {
+                    <td class="estado-cell">
+                        ${proposta.estado || ''}
+                    </td>
 
-        titulo.textContent =
-            `📅 LISTA DE PROPOSTAS — ${ano}`;
+                    <td>
+                        ${
+                            proposta.link
+                                ? `<a
+                                    href="${proposta.link}"
+                                    target="_blank"
+                                    rel="noopener"
+                                >Abrir</a>`
+                                : ''
+                        }
+                    </td>
+
+                    <td>
+                        ${proposta.obraNom || ''}
+                    </td>
+
+                    <td class="numero">
+                        ${
+                            precoCusto !== null
+                                ? formatarMoeda(
+                                    precoCusto
+                                  )
+                                : ''
+                        }
+                    </td>
+
+                    <td class="numero">
+                        ${
+                            precoVenda !== null
+                                ? formatarMoeda(
+                                    precoVenda
+                                  )
+                                : ''
+                        }
+                    </td>
+
+                    <td class="numero">
+                        ${
+                            k !== null
+                                ? formatarMoeda(k)
+                                : ''
+                        }
+                    </td>
+
+                    <td class="numero">
+                        ${
+                            percK !== null
+                                ? formatarPercentagem(
+                                    percK
+                                  )
+                                : ''
+                        }
+                    </td>
+
+                    <td class="acoes">
+
+                        <button
+                            type="button"
+                            class="b-edit"
+                            onclick="editarPropostaOrcamento('${proposta.id}')"
+                            title="Editar proposta"
+                        >
+                            ✏️
+                        </button>
+
+                        <button
+                            type="button"
+                            class="b-del"
+                            onclick="eliminarPropostaOrcamento('${proposta.id}')"
+                            title="Eliminar proposta"
+                        >
+                            🗑️
+                        </button>
+
+                    </td>
+
+                </tr>
+
+            `;
+        });
     }
 
-    const container =
-        document.getElementById(
-            'list-orcamentos'
-        );
 
-    if (container) {
+    html += `
 
-        container.innerHTML = `
-            <div class="card">
-                <h3 style="margin-top:0;">
-                    📋 Lista de Propostas
-                </h3>
+                    </tbody>
 
-                <p>
-                    Ano selecionado:
-                    <b>${ano}</b>
-                </p>
+                </table>
 
-                <p style="color:#64748b;">
-                    A estrutura do registo de propostas
-                    será implementada no próximo passo.
-                </p>
             </div>
-        `;
-    }
+
+        </div>
+
+    `;
+
+
+    container.innerHTML = html;
 }
 
 function novaPropostaOrcamento() {
