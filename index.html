@@ -980,13 +980,30 @@
                 📋 Lista de Propostas
             </h3>
 
-            <button
-                type="button"
-                class="module-create-button"
-                onclick="novaPropostaOrcamento()"
-            >
-                ＋ Nova Proposta
-            </button>
+                        <div style="
+                display:flex;
+                gap:8px;
+                align-items:center;
+            ">
+
+                <button
+                    type="button"
+                    class="module-create-button"
+                    onclick="alternarResumoOrcamentos()"
+                    id="btn-toggle-resumo-orcamentos"
+                >
+                    👁️ Ocultar resumo
+                </button>
+
+                <button
+                    type="button"
+                    class="module-create-button"
+                    onclick="novaPropostaOrcamento()"
+                >
+                    ＋ Nova Proposta
+                </button>
+
+            </div>
 
         </div>
 
@@ -3074,6 +3091,47 @@ const anoNumero =
     });
 }
 
+let resumoOrcamentosVisivel = true;
+
+function alternarResumoOrcamentos() {
+
+    const resumo =
+        document.querySelector(
+            '#list-orcamentos .orcamentos-resumo'
+        );
+
+    const botao =
+        document.getElementById(
+            'btn-toggle-resumo-orcamentos'
+        );
+
+    if (!resumo || !botao) return;
+
+    resumoOrcamentosVisivel =
+        !resumoOrcamentosVisivel;
+
+    if (resumoOrcamentosVisivel) {
+
+        resumo.style.display = '';
+
+        botao.innerHTML =
+            '👁️ Ocultar resumo';
+
+        botao.title =
+            'Ocultar resumo anual';
+
+    } else {
+
+        resumo.style.display = 'none';
+
+        botao.innerHTML =
+            '👁️ Mostrar resumo';
+
+        botao.title =
+            'Mostrar resumo anual';
+    }
+}	
+	
 function renderOrcamentos() {
 
     const container =
@@ -3809,9 +3867,6 @@ function renderOrcamentos() {
                     }
                 </td>
 
-                <td class="numero">
-                    ${''}
-                </td>
 
                 <td
                     class="numero monitorizacao-cell"
@@ -4228,6 +4283,34 @@ function renderOrcamentos() {
 
 
     container.innerHTML = html;
+
+	    const resumo =
+        container.querySelector(
+            '.orcamentos-resumo'
+        );
+
+    const botao =
+        document.getElementById(
+            'btn-toggle-resumo-orcamentos'
+        );
+
+    if (resumo && botao) {
+
+        if (resumoOrcamentosVisivel) {
+
+            resumo.style.display = '';
+
+            botao.innerHTML =
+                '👁️ Ocultar resumo';
+
+        } else {
+
+            resumo.style.display = 'none';
+
+            botao.innerHTML =
+                '👁️ Mostrar resumo';
+        }
+    }
 }
 
 function novaPropostaOrcamento() {
