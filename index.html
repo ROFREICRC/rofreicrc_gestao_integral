@@ -3140,9 +3140,12 @@ function renderOrcamentos() {
     if (!container) return;
 
     let propostas =
-        Array.isArray(DB.orcamentos)
-            ? [...DB.orcamentos]
-            : [];
+    Array.isArray(DB.orcamentos)
+        ? DB.orcamentos.filter(proposta =>
+            proposta &&
+            String(proposta.num || '').trim() !== ''
+        )
+        : [];
 
     // Filtrar pelo ano selecionado
     if (orcamentoAnoSelecionado !== null) {
