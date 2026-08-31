@@ -135,11 +135,88 @@
             box-shadow: inset 4px 0 0 #93c5fd, 0 4px 12px rgba(71,85,105,0.08);
         }
 
-        .menu-gestao-wrapper {
+                .menu-gestao-wrapper {
             position: relative;
             width: 100%;
         }
 
+        .menu-orcamentos-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .menu-orcamentos-principal {
+            width: 100%;
+            background: #e8edf4 !important;
+            border: 1px solid #d5e1ee !important;
+            color: #40566b !important;
+        }
+
+        .menu-orcamentos-principal:hover {
+            background: #dce7f1 !important;
+        }
+
+        .menu-orcamentos-dropdown {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 5px;
+            padding-left: 8px;
+            animation: menuFadeIn 0.18s ease;
+        }
+
+        .menu-orcamentos-dropdown.menu-open {
+            display: flex;
+        }
+
+        .menu-orcamentos-subprincipal {
+            background: #eef3f8 !important;
+            border: 1px solid #dbe4ed !important;
+            color: #475569 !important;
+        }
+
+        .menu-orcamentos-subprincipal:hover {
+            background: #e2ebf4 !important;
+        }
+
+        .menu-lista-propostas-dropdown {
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 4px;
+            padding-left: 10px;
+            animation: menuFadeIn 0.18s ease;
+        }
+
+        .menu-lista-propostas-dropdown.menu-open {
+            display: flex;
+        }
+
+        .menu-lista-propostas-dropdown button {
+            background: rgba(255,255,255,0.48);
+            font-size: 11px;
+            padding: 9px 11px;
+        }
+
+        .menu-lista-propostas-dropdown button:hover {
+            background: #e4edf7;
+        }
+
+        #lista-anos-orcamentos {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        #lista-anos-orcamentos button {
+            background: #f2f6fa;
+            font-size: 11px;
+            padding: 9px 11px;
+        }
+
+        #lista-anos-orcamentos button:hover {
+            background: #e1ebf4;
+        }
         .menu-gestao-principal {
             background: #e5edf6 !important;
             border: 1px solid #d5e1ee !important;
@@ -531,15 +608,71 @@
         </button>
 
         <button
-            id="nav-users"
-            onclick="showMod('users')"
-            style="background:#f5dfe1;"
+    id="nav-users"
+    onclick="showMod('users')"
+    style="background:#f5dfe1;"
+>
+    👥 ADMIN
+</button>
+
+<div
+    class="menu-orcamentos-wrapper"
+    onmouseenter="mostrarMenuOrcamentos()"
+    onmouseleave="ocultarMenuOrcamentos()"
+>
+
+    <button
+        id="nav-orcamentos"
+        type="button"
+        class="menu-orcamentos-principal"
+        onclick="alternarMenuOrcamentos()"
+    >
+        💰 ORÇAMENTOS ▾
+    </button>
+
+    <div
+        id="menu-orcamentos"
+        class="menu-orcamentos-dropdown"
+    >
+
+        <button
+            id="nav-orcamentos-lista"
+            type="button"
+            class="menu-orcamentos-subprincipal"
+            onclick="alternarListaPropostas()"
         >
-            👥 ADMIN
+            📋 LISTA DE PROPOSTAS ▾
         </button>
 
         <div
-            class="menu-gestao-wrapper"
+            id="menu-lista-propostas"
+            class="menu-lista-propostas-dropdown"
+        >
+
+            <button
+                type="button"
+                onclick="mostrarListaPropostas()"
+            >
+                📋 Todas as Propostas
+            </button>
+
+            <button
+                type="button"
+                onclick="abrirNovoAnoOrcamento()"
+            >
+                ➕ NOVO ANO
+            </button>
+
+            <div id="lista-anos-orcamentos"></div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div
+    class="menu-gestao-wrapper"
             onmouseenter="mostrarMenuGestao()"
             onmouseleave="ocultarMenuGestao()"
         >
@@ -645,7 +778,33 @@
 
     <div class="container">
         
-        <section id="mod-obras" class="mod-sec">
+        <section id="mod-orcamentos" class="mod-sec">
+
+    <div class="form-box">
+
+        <h3 id="orcamentos-vista-titulo">
+            📋 Lista de Propostas
+        </h3>
+
+        <div
+            id="list-orcamentos"
+            style="margin-top:15px;"
+        >
+            <div class="card">
+
+                <p style="margin:0; color:#64748b;">
+                    Selecione <b>LISTA DE PROPOSTAS</b>
+                    ou um ano no menu <b>ORÇAMENTOS</b>.
+                </p>
+
+            </div>
+        </div>
+
+    </div>
+
+</section>
+
+<section id="mod-obras" class="mod-sec">
             <div class="form-box">
                 <h3>🏗️ Gestão de Obras</h3>
                 <div class="grid">
@@ -1377,7 +1536,23 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // VARIABLES GLOBALES
-let DB = { obras:[], rend:[], horas:[], ne:[], consultas:[], ped:[], tar:[], obs:[], users:[], notif:[], hist:{}, forn:[], empresa:{} };
+let DB = {
+    obras:[],
+    rend:[],
+    horas:[],
+    ne:[],
+    consultas:[],
+    ped:[],
+    tar:[],
+    obs:[],
+    users:[],
+    notif:[],
+    hist:{},
+    forn:[],
+    orcamentos:[],
+    orcamentosAnos:[],
+    empresa:{}
+};
 let user = null; 
 let currentMod = 'obras'; 
 let editingId = null; 
@@ -1470,9 +1645,31 @@ function sync() {
     // El histórico ya no se sincroniza aquí para ahorrar ancho de banda
 
     // Empresa é um objeto único, mantemos on('value')
-    db.ref('empresa').on('value', snap => {
+        db.ref('empresa').on('value', snap => {
         DB.empresa = snap.val() || {};
         triggerRender();
+    });
+
+    db.ref('orcamentos/anos').on('value', snap => {
+
+        const dados = snap.val() || {};
+
+        DB.orcamentosAnos =
+            Object.entries(dados)
+                .map(([id, valor]) => ({
+                    id,
+                    ano: Number(valor.ano),
+                    criadoPor: valor.criadoPor || '',
+                    dataCriacao: valor.dataCriacao || ''
+                }))
+                .filter(item =>
+                    Number.isFinite(item.ano)
+                )
+                .sort((a, b) =>
+                    b.ano - a.ano
+                );
+
+        renderAnosOrcamentos();
     });
 
     // Verificação do Admin corre apenas uma vez ('once') na inicialização
@@ -2292,7 +2489,251 @@ function novoRegistroModulo(mod) {
 
 }
 
-function showMod(mod) {
+function renderAnosOrcamentos() {
+
+    const container =
+        document.getElementById(
+            'lista-anos-orcamentos'
+        );
+
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    DB.orcamentosAnos.forEach(item => {
+
+        const button =
+            document.createElement('button');
+
+        button.type = 'button';
+
+        button.innerHTML =
+            `📅 ${item.ano}`;
+
+        button.onclick = () =>
+            abrirAnoOrcamento(item.ano);
+
+        container.appendChild(button);
+    });
+}
+
+function mostrarMenuOrcamentos() {
+
+    const menu =
+        document.getElementById(
+            'menu-orcamentos'
+        );
+
+    if (menu) {
+        menu.classList.add('menu-open');
+    }
+}
+
+function ocultarMenuOrcamentos() {
+
+    const menu =
+        document.getElementById(
+            'menu-orcamentos'
+        );
+
+    if (menu) {
+        menu.classList.remove('menu-open');
+    }
+}
+
+function alternarMenuOrcamentos() {
+
+    const menu =
+        document.getElementById(
+            'menu-orcamentos'
+        );
+
+    if (!menu) return;
+
+    menu.classList.toggle('menu-open');
+}
+
+function alternarListaPropostas() {
+
+    const lista =
+        document.getElementById(
+            'menu-lista-propostas'
+        );
+
+    if (!lista) return;
+
+    lista.classList.toggle('menu-open');
+}
+
+function mostrarListaPropostas() {
+
+    const menu =
+        document.getElementById(
+            'menu-orcamentos'
+        );
+
+    const lista =
+        document.getElementById(
+            'menu-lista-propostas'
+        );
+
+    if (menu) {
+        menu.classList.add('menu-open');
+    }
+
+    if (lista) {
+        lista.classList.add('menu-open');
+    }
+
+    showMod('orcamentos');
+}
+
+function abrirAnoOrcamento(ano) {
+
+    const menu =
+        document.getElementById(
+            'menu-orcamentos'
+        );
+
+    const lista =
+        document.getElementById(
+            'menu-lista-propostas'
+        );
+
+    if (menu) {
+        menu.classList.add('menu-open');
+    }
+
+    if (lista) {
+        lista.classList.add('menu-open');
+    }
+
+    mostrarVistaAnoOrcamento(ano);
+}
+
+function abrirNovoAnoOrcamento() {
+
+    if (
+        !user ||
+        user.role !== 'Administrador'
+    ) {
+
+        alert(
+            'Apenas um Administrador pode criar um novo ano.'
+        );
+
+        return;
+    }
+
+    const ano =
+        prompt(
+            'Introduza o ano que pretende criar:'
+        );
+
+    if (ano === null) return;
+
+    const anoNumero =
+        Number(String(ano).trim());
+
+    if (
+        !Number.isInteger(anoNumero) ||
+        anoNumero < 2000 ||
+        anoNumero > 2100
+    ) {
+
+        alert(
+            'Introduza um ano válido.'
+        );
+
+        return;
+    }
+
+    const existe =
+        DB.orcamentosAnos.some(
+            item => item.ano === anoNumero
+        );
+
+    if (existe) {
+
+        alert(
+            `O ano ${anoNumero} já existe.`
+        );
+
+        return;
+    }
+
+    const id =
+        `ANO_${anoNumero}`;
+
+    db.ref(
+        `orcamentos/anos/${id}`
+    ).set({
+
+        ano: anoNumero,
+
+        criadoPor:
+            user.n || user.u || '',
+
+        dataCriacao:
+            new Date().toISOString()
+
+    }).then(() => {
+
+        alert(
+            `O ano ${anoNumero} foi criado com sucesso.`
+        );
+
+    }).catch(error => {
+
+        console.error(error);
+
+        alert(
+            'Não foi possível criar o ano.'
+        );
+    });
+}
+
+function mostrarVistaAnoOrcamento(ano) {
+
+    showMod('orcamentos');
+
+    const titulo =
+        document.getElementById(
+            'orcamentos-vista-titulo'
+        );
+
+    if (titulo) {
+
+        titulo.textContent =
+            `📅 LISTA DE PROPOSTAS — ${ano}`;
+    }
+
+    const container =
+        document.getElementById(
+            'list-orcamentos'
+        );
+
+    if (container) {
+
+        container.innerHTML = `
+            <div class="card">
+                <h3 style="margin-top:0;">
+                    📋 Lista de Propostas
+                </h3>
+
+                <p>
+                    Ano selecionado:
+                    <b>${ano}</b>
+                </p>
+
+                <p style="color:#64748b;">
+                    A estrutura do registo de propostas
+                    será implementada no próximo passo.
+                </p>
+            </div>
+        `;
+    }
+}
 
     currentMod = mod;
     massMode = false;
@@ -2302,6 +2743,7 @@ function showMod(mod) {
         nas: '📁 NAS',
         notif: '🔔 NOTIFICAÇÕES',
         users: '👥 ADMIN',
+        orcamentos: '💰 ORÇAMENTOS',
         obras: '🏗️ OBRAS',
         rend: '📊 RENDIMENTOS',
         horas: '🕒 HORAS',
