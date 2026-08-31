@@ -1604,6 +1604,8 @@ async function doLogin() {
         
         showMod('obras'); 
         renderAll();
+
+        renderAnosOrcamentos();
     } else {
         alert("Credenciais inválidas.");
     }
@@ -2631,6 +2633,8 @@ function mostrarListaPropostas() {
     if (lista) {
         lista.classList.add('menu-open');
     }
+
+    renderAnosOrcamentos();
 
     showMod('orcamentos');
 }
