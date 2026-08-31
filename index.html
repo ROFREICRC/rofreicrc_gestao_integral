@@ -3365,35 +3365,55 @@ function renderOrcamentos() {
                       quantidade * 100
                     : null;
 
+            const permiteValores =
+                estado ===
+                    'PROPOSTA ENVIADA AO CLIENTE' ||
+                estado ===
+                    'PROPOSTA ADJUDICADA' ||
+                estado ===
+                    'PROPOSTA NÃO ADJUDICADA';
+
             const valores =
-                propostasEstado
-                    .filter(
-                        p =>
-                            p.precoCusto !== '' &&
-                            p.precoCusto !== null &&
-                            p.precoCusto !== undefined
-                    )
-                    .map(
-                        p => Number(p.precoCusto)
-                    )
-                    .filter(
-                        v => Number.isFinite(v)
-                    );
+                permiteValores
+                    ? propostasEstado
+                        .filter(
+                            p =>
+                                p.precoCusto !== '' &&
+                                p.precoCusto !== null &&
+                                p.precoCusto !== undefined
+                        )
+                        .map(
+                            p =>
+                                Number(
+                                    p.precoCusto
+                                )
+                        )
+                        .filter(
+                            v =>
+                                Number.isFinite(v)
+                        )
+                    : [];
 
             const valoresVenda =
-                propostasEstado
-                    .filter(
-                        p =>
-                            p.precoVenda !== '' &&
-                            p.precoVenda !== null &&
-                            p.precoVenda !== undefined
-                    )
-                    .map(
-                        p => Number(p.precoVenda)
-                    )
-                    .filter(
-                        v => Number.isFinite(v)
-                    );
+                permiteValores
+                    ? propostasEstado
+                        .filter(
+                            p =>
+                                p.precoVenda !== '' &&
+                                p.precoVenda !== null &&
+                                p.precoVenda !== undefined
+                        )
+                        .map(
+                            p =>
+                                Number(
+                                    p.precoVenda
+                                )
+                        )
+                        .filter(
+                            v =>
+                                Number.isFinite(v)
+                        )
+                    : [];
 
             const totalCusto =
                 valores.reduce(
@@ -4893,12 +4913,24 @@ async function guardarPropostaOrcamento() {
 
         utilizadorCriacao:
             editingOrcamentoId
-                ? undefined
+                ? (
+                    DB.orcamentos.find(
+                        item =>
+                            item.id ===
+                            editingOrcamentoId
+                    )?.utilizadorCriacao || ''
+                )
                 : user.u,
 
         dataCriacao:
             editingOrcamentoId
-                ? undefined
+                ? (
+                    DB.orcamentos.find(
+                        item =>
+                            item.id ===
+                            editingOrcamentoId
+                    )?.dataCriacao || ''
+                )
                 : new Date().toISOString(),
 
         utilizadorEdicao:
@@ -4988,6 +5020,11 @@ async function eliminarPropostaOrcamento(id) {
         await db.ref(
             `orcamentos/${id}`
         ).remove();
+
+        DB.orcamentos =
+            DB.orcamentos.filter(
+                item => item.id !== id
+            );
 
         alert(
             'Proposta eliminada com sucesso.'
