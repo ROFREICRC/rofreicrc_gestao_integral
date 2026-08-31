@@ -3314,7 +3314,18 @@ function renderOrcamentos() {
 
     const totalPropostas = propostas.length;
 
-    let totalExecutadas = 0;
+    const totalExecutadas =
+    propostas
+        .filter(
+            p =>
+                p.estado ===
+                    'PROPOSTA ENVIADA AO CLIENTE' ||
+                p.estado ===
+                    'PROPOSTA ADJUDICADA' ||
+                p.estado ===
+                    'PROPOSTA NÃO ADJUDICADA'
+        )
+        .length;
 
     const resumoEstados =
         estados.map(estado => {
@@ -3354,16 +3365,13 @@ function renderOrcamentos() {
                     ? quantidade
                     : null;
 
-            if (quantidadeExecutada !== null) {
-                totalExecutadas += quantidadeExecutada;
-            }
-
+           
             const percentagemExecutada =
-                quantidadeExecutada !== null &&
-                quantidade > 0
-                    ? quantidadeExecutada /
-                      quantidade * 100
-                    : null;
+    			quantidadeExecutada !== null &&
+			    totalExecutadas > 0
+			        ? quantidadeExecutada /
+			          totalExecutadas * 100
+			        : null;
 
             const permiteValores =
                 estado ===
@@ -3989,16 +3997,12 @@ function renderOrcamentos() {
             </td>
 
             <td class="numero">
-                ${
-                    totalPropostas > 0
-                        ? formatarPercentagem(
-                            totalExecutadas /
-                            totalPropostas *
-                            100
-                          )
-                        : '-'
-                }
-            </td>
+			    ${
+			        totalExecutadas > 0
+			            ? '100,00%'
+			            : '-'
+			    }
+			</td>
 
             <td></td>
 
