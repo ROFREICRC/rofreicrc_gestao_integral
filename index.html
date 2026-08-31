@@ -1640,8 +1640,14 @@ let syncTimeout;
 function triggerRender() {
     clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
+
         updateSelects();
-        if (user) renderAll();
+
+        if (user) {
+            renderAll();
+            renderOrcamentos();
+        }
+
     }, 300);
 }
 
@@ -2675,6 +2681,8 @@ function mostrarListaPropostas() {
 
     renderAnosOrcamentos();
 
+    renderOrcamentos();
+
     showMod('orcamentos');
 }
 
@@ -2761,6 +2769,8 @@ function abrirAnoOrcamento(ano) {
     }
 
     mostrarVistaAnoOrcamento(ano);
+
+    renderOrcamentos();
 }
 
 function abrirNovoAnoOrcamento() {
@@ -2857,6 +2867,235 @@ const anoNumero =
         );
     });
 }
+
+function renderOrcamentos() {
+
+    const container =
+        document.getElementById(
+            'list-orcamentos'
+        );
+
+    if (!container) return;
+
+    let propostas =
+        Array.isArray(DB.orcamentos)
+            ? [...DB.orcamentos]
+            : [];
+
+    if (orcamentoAnoSelecionado !== null) {
+
+        propostas =
+            propostas.filter(
+                proposta =>
+                    Number(proposta.ano) ===
+                    Number(orcamentoAnoSelecionado)
+            );
+    }
+
+    propostas.sort((a, b) => {
+
+        return String(b.num || '').localeCompare(
+            String(a.num || ''),
+            undefined,
+            {
+                numeric: true,
+                sensitivity: 'base'
+            }
+        );
+    });
+
+    if (!propostas.length) {
+
+        container.innerHTML = `
+            <div class="card">
+
+                <p style="
+                    margin:0;
+                    color:#64748b;
+                    text-align:center;
+                ">
+                    Não existem propostas registadas
+                    ${orcamentoAnoSelecionado !== null
+                        ? `para o ano ${orcamentoAnoSelecionado}.`
+                        : '.'}
+                </p>
+
+            </div>
+        `;
+
+        return;
+    }
+
+    container.innerHTML = '';
+
+    propostas.forEach(proposta => {
+
+        const precoCusto =
+            Number(proposta.precoCusto || 0);
+
+        const precoVenda =
+            Number(proposta.precoVenda || 0);
+
+        const k =
+            Number(proposta.k ?? (
+                precoVenda - precoCusto
+            ));
+
+        const percK =
+            Number(
+                proposta.percK ??
+                (
+                    precoCusto !== 0
+                        ? (k / precoCusto) * 100
+                        : 0
+                )
+            );
+
+        const card =
+            document.createElement('div');
+
+        card.className = 'card';
+
+        card.innerHTML = `
+            <div
+                class="card-grid"
+                style="align-items:center;"
+            >
+
+                <div>
+                    <b>Nº Proposta:</b>
+                    ${proposta.num || '---'}
+                </div>
+
+                <div>
+                    <b>Designação:</b>
+                    ${proposta.designacao || '---'}
+                </div>
+
+                <div>
+                    <b>Obra:</b>
+                    ${proposta.obraNom || '---'}
+                </div>
+
+                <div>
+                    <b>Estado:</b>
+                    ${proposta.estado || '---'}
+                </div>
+
+                <div>
+                    <b>Preço de custo:</b>
+                    ${
+                        proposta.precoCusto !== '' &&
+                        proposta.precoCusto !== null &&
+                        proposta.precoCusto !== undefined
+                            ? `€ ${precoCusto.toLocaleString(
+                                'pt-PT',
+                                {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                }
+                            )}`
+                            : '---'
+                    }
+                </div>
+
+                <div>
+                    <b>Preço de venda:</b>
+                    ${
+                        proposta.precoVenda !== '' &&
+                        proposta.precoVenda !== null &&
+                        proposta.precoVenda !== undefined
+                            ? `€ ${precoVenda.toLocaleString(
+                                'pt-PT',
+                                {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                }
+                            )}`
+                            : '---'
+                    }
+                </div>
+
+                <div>
+                    <b>K:</b>
+                    ${
+                        proposta.precoCusto !== '' &&
+                        proposta.precoVenda !== '' &&
+                        proposta.precoCusto !== null &&
+                        proposta.precoVenda !== null &&
+                        proposta.precoCusto !== undefined &&
+                        proposta.precoVenda !== undefined
+                            ? `€ ${k.toLocaleString(
+                                'pt-PT',
+                                {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                }
+                            )}`
+                            : '---'
+                    }
+                </div>
+
+                <div>
+                    <b>% K:</b>
+                    ${
+                        proposta.precoCusto !== '' &&
+                        proposta.precoVenda !== '' &&
+                        proposta.precoCusto !== null &&
+                        proposta.precoVenda !== null &&
+                        proposta.precoCusto !== undefined &&
+                        proposta.precoVenda !== undefined
+                            ? `${percK.toFixed(2)}%`
+                            : '---'
+                    }
+                </div>
+
+            </div>
+
+            <div class="meta">
+
+                <span>
+                    📅 Ano:
+                    ${proposta.ano || '---'}
+                </span>
+
+                <span>
+                    📅 Receção:
+                    ${proposta.dataRececao || '---'}
+                </span>
+
+                <span>
+                    📅 Apresentação:
+                    ${proposta.dataApresentacao || '---'}
+                </span>
+
+            </div>
+
+            <div class="actions">
+
+                <button
+                    type="button"
+                    class="b-edit"
+                    onclick="editarPropostaOrcamento('${proposta.id}')"
+                >
+                    ✏️ Editar
+                </button>
+
+                <button
+                    type="button"
+                    class="b-del"
+                    onclick="eliminarPropostaOrcamento('${proposta.id}')"
+                >
+                    🗑️ Eliminar
+                </button>
+
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+}
+
 
 function mostrarVistaAnoOrcamento(ano) {
 
@@ -3535,6 +3774,65 @@ async function guardarPropostaOrcamento() {
         );
     }
 }
+
+async function eliminarPropostaOrcamento(id) {
+
+    if (!user) {
+
+        alert(
+            'É necessário iniciar sessão.'
+        );
+
+        return;
+    }
+
+    const proposta =
+        DB.orcamentos.find(
+            item => item.id === id
+        );
+
+    if (!proposta) {
+
+        alert(
+            'Proposta não encontrada.'
+        );
+
+        return;
+    }
+
+    const confirmar =
+        confirm(
+            `Tem a certeza de que pretende eliminar a proposta ${proposta.num || ''}?`
+        );
+
+    if (!confirmar) {
+        return;
+    }
+
+    try {
+
+        await db.ref(
+            `orcamentos/${id}`
+        ).remove();
+
+        alert(
+            'Proposta eliminada com sucesso.'
+        );
+
+        renderOrcamentos();
+
+    } catch (error) {
+
+        console.error(
+            'Erro ao eliminar proposta:',
+            error
+        );
+
+        alert(
+            'Não foi possível eliminar a proposta.'
+        );
+    }
+}	
 	
 function showMod(mod) {
 
