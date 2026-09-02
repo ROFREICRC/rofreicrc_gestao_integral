@@ -170,10 +170,12 @@
         }
 
         .menu-orcamentos-subprincipal {
-            background: #eef3f8 !important;
-            border: 1px solid #dbe4ed !important;
-            color: #475569 !important;
-        }
+		    background: #eef3f8 !important;
+		    border: 1px solid #dbe4ed !important;
+		    color: #475569 !important;
+		    font-size: 11px;
+		    padding: 9px 11px;
+		}
 
         .menu-orcamentos-subprincipal:hover {
             background: #e2ebf4 !important;
@@ -872,18 +874,6 @@
         >
             📋 LISTA DE PROPOSTAS
         </button>
-
-        <div
-		    id="menu-lista-propostas"
-		    class="menu-lista-propostas-dropdown"
-		>
-		    <button
-		        type="button"
-		        onclick="mostrarListaPropostas()"
-		    >
-		        📋 Todas as Propostas
-		    </button>
-		</div>
 
     </div>
 
@@ -2943,17 +2933,8 @@ function mostrarListaPropostas() {
             'menu-orcamentos'
         );
 
-    const lista =
-        document.getElementById(
-            'menu-lista-propostas'
-        );
-
-    if (menu) {
+        if (menu) {
         menu.classList.add('menu-open');
-    }
-
-    if (lista) {
-        lista.classList.add('menu-open');
     }
 
     renderAnosOrcamentos();
@@ -4426,6 +4407,51 @@ function renderOrcamentos() {
     }
 }
 
+function preencherAnosNoPopup() {
+
+    const select =
+        document.getElementById(
+            'orc-ano'
+        );
+
+    if (!select) return;
+
+    const valorAtual =
+        select.value;
+
+    select.innerHTML =
+        '<option value="">Selecione o ano</option>';
+
+    [...DB.orcamentosAnos]
+        .sort(
+            (a, b) =>
+                Number(b.ano) -
+                Number(a.ano)
+        )
+        .forEach(item => {
+
+            const option =
+                document.createElement(
+                    'option'
+                );
+
+            option.value =
+                Number(item.ano);
+
+            option.textContent =
+                item.ano;
+
+            select.appendChild(
+                option
+            );
+        });
+
+    if (valorAtual) {
+        select.value = valorAtual;
+    }
+}
+
+
 function novaPropostaOrcamento() {
 
     if (!user) {
@@ -4443,6 +4469,8 @@ function novaPropostaOrcamento() {
         'orcamento-popup-titulo'
     ).textContent =
         '📋 Nova Proposta';
+
+    preencherAnosNoPopup();
 
     document.getElementById(
         'orc-ano'
@@ -4548,6 +4576,8 @@ function editarPropostaOrcamento(id) {
     ];
 
     renderAnosOrcamentos();
+
+    preencherAnosNoPopup();
 
     document.getElementById(
         'orcamento-popup-titulo'
