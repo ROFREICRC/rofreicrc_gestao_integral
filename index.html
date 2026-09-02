@@ -3024,8 +3024,9 @@ function eliminarAnoOrcamento(ano) {
 
 async function abrirAnoOrcamento(ano) {
 
-    orcamentoAnoSelecionado =
-        Number(ano);
+    orcamentoAnosSelecionados = [
+        Number(ano)
+    ];
 
     const menu =
         document.getElementById(
@@ -3863,9 +3864,13 @@ function renderOrcamentos() {
         <div class="orcamentos-resumo">
 
             <div class="orcamentos-resumo-titulo">
-                PROPOSTAS — ANO
-                ${orcamentoAnoSelecionado ?? ''}
-            </div>
+			    PROPOSTAS — ANO(S)
+			    ${
+			        orcamentoAnosSelecionados.length > 0
+			            ? orcamentoAnosSelecionados.join(', ')
+			            : 'TODOS'
+			    }
+			</div>
 
             <div class="orcamentos-tabela-wrapper">
 
@@ -4550,8 +4555,11 @@ function editarPropostaOrcamento(id) {
 
     editingOrcamentoId = id;
 
-    orcamentoAnoSelecionado =
-        Number(proposta.ano);
+    orcamentoAnosSelecionados = [
+        Number(proposta.ano)
+    ];
+
+    renderAnosOrcamentos();
 
     document.getElementById(
         'orcamento-popup-titulo'
