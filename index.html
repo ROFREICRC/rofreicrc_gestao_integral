@@ -607,7 +607,25 @@
     color: #334155 !important;
     box-shadow: inset 0 0 0 1px #b9cee3;
 }
-		
+
+.orcamentos-ano-eliminar {
+    flex: 0 0 36px;
+    width: 36px !important;
+    min-width: 36px !important;
+    padding: 8px 0 !important;
+    border: 1px solid #ead1d4 !important;
+    border-radius: 9px !important;
+    background: #f7e4e5 !important;
+    color: #7a5056 !important;
+    cursor: pointer;
+    font-size: 11px !important;
+    text-align: center !important;
+}
+
+.orcamentos-ano-eliminar:hover {
+    background: #f1d5d7 !important;
+    transform: translateY(-1px);
+}		
 .orcamentos-resumo {
     margin-bottom: 18px;
     background: #ffffff;
@@ -647,11 +665,43 @@
     text-align: center;
 }
 
+.filtros-multiselect-orcamentos th {
+    background: #f8fafc;
+    padding: 4px;
+}
+
+.filtros-multiselect-orcamentos select {
+    width: 100%;
+    min-width: 90px;
+    max-width: 180px;
+    height: 48px;
+    box-sizing: border-box;
+    border: 1px solid #d7dee8;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #475569;
+    font-size: 10px;
+}
+
 .orcamentos-tabela td {
     padding: 7px 8px;
     border: 1px solid #e1e7ee;
     color: #475569;
     vertical-align: middle;
+}
+
+.orcamentos-tabela th:first-child,
+.orcamentos-tabela td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: #f8fafc;
+    box-shadow: 2px 0 4px rgba(71,85,105,0.08);
+}
+
+.orcamentos-tabela th:first-child {
+    z-index: 5;
+    background: #e8eef5;
 }
 
 .orcamentos-tabela.propostas td {
@@ -2797,6 +2847,13 @@ function renderAnosOrcamentos() {
 
     anos.forEach(item => {
 
+        const linhaAno =
+            document.createElement('div');
+
+        linhaAno.style.display = 'flex';
+        linhaAno.style.alignItems = 'center';
+        linhaAno.style.gap = '4px';
+
         const button =
             document.createElement('button');
 
@@ -2807,6 +2864,8 @@ function renderAnosOrcamentos() {
 
         button.innerText =
             item.ano;
+
+        button.style.flex = '1';
 
         if (
             orcamentoAnosSelecionados
@@ -2825,8 +2884,45 @@ function renderAnosOrcamentos() {
                 item.ano
             );
 
-        container.appendChild(
+        linhaAno.appendChild(
             button
+        );
+
+        if (
+            user &&
+            user.role === 'Administrador'
+        ) {
+
+            const eliminar =
+                document.createElement('button');
+
+            eliminar.type = 'button';
+
+            eliminar.className =
+                'orcamentos-ano-eliminar';
+
+            eliminar.innerText =
+                '🗑️';
+
+            eliminar.title =
+                `Eliminar ano ${item.ano}`;
+
+            eliminar.onclick = event => {
+
+                event.stopPropagation();
+
+                eliminarAnoOrcamento(
+                    item.ano
+                );
+            };
+
+            linhaAno.appendChild(
+                eliminar
+            );
+        }
+
+        container.appendChild(
+            linhaAno
         );
     });
 
@@ -2963,17 +3059,17 @@ function eliminarAnoOrcamento(ano) {
             item => Number(item.ano) === Number(ano)
         );
 
-    let mensagem =
-        `Tem a certeza de que pretende eliminar o ano ${ano}?`;
-
     if (propostasDoAno.length > 0) {
 
-        mensagem +=
-            `\n\nExistem ${propostasDoAno.length} proposta(s) associada(s) a este ano.`;
+        alert(
+            `Não é possível eliminar o ano ${ano} porque existem ${propostasDoAno.length} proposta(s) associada(s) a este ano.`
+        );
 
-        mensagem +=
-            '\n\nA eliminação do ano NÃO irá eliminar as propostas.';
+        return;
     }
+
+    const mensagem =
+        `Tem a certeza de que pretende eliminar o ano ${ano}?`;
 
     if (!confirm(mensagem)) {
         return;
@@ -4168,6 +4264,124 @@ function renderOrcamentos() {
 
                             <th>Ações</th>
 
+                                                </tr>
+
+                        <tr class="filtros-multiselect-orcamentos">
+
+                            <th>
+                                <select
+                                    id="filtro-orc-num"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-designacao"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-prazo"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-rececao"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-apresentacao"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-tempo"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-obs"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-estado"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-link"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-obra"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-custo"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-venda"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-k"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th>
+                                <select
+                                    id="filtro-orc-perck"
+                                    multiple
+                                    onchange="aplicarFiltrosOrcamentos()"
+                                ></select>
+                            </th>
+
+                            <th></th>
+
                         </tr>
 
                     </thead>
@@ -4345,14 +4559,21 @@ function renderOrcamentos() {
                             ✏️
                         </button>
 
-                        <button
-                            type="button"
-                            class="b-del"
-                            onclick="eliminarPropostaOrcamento('${proposta.id}')"
-                            title="Eliminar proposta"
-                        >
-                            🗑️
-                        </button>
+                    	 ${
+                            user &&
+                            user.role === 'Administrador'
+                                ? `
+                                    <button
+                                        type="button"
+                                        class="b-del"
+                                        onclick="eliminarPropostaOrcamento('${proposta.id}')"
+                                        title="Eliminar proposta"
+                                    >
+                                        🗑️
+                                    </button>
+                                  `
+                                : ''
+                        }
 
                     </td>
 
@@ -5158,7 +5379,83 @@ async function eliminarPropostaOrcamento(id) {
         );
     }
 }	
-	
+
+function aplicarFiltrosOrcamentos() {
+
+    const tabela =
+        document.querySelector(
+            '.orcamentos-tabela.propostas'
+        );
+
+    if (!tabela) return;
+
+    const filtros =
+        Array.from(
+            tabela.querySelectorAll(
+                '.filtros-multiselect-orcamentos select'
+            )
+        );
+
+    const linhas =
+        tabela.querySelectorAll(
+            'tbody tr.proposta-row'
+        );
+
+    linhas.forEach(linha => {
+
+        let mostrar = true;
+
+        filtros.forEach(filtro => {
+
+            const valores =
+                Array.from(
+                    filtro.selectedOptions
+                ).map(
+                    option =>
+                        option.value
+                            .toLowerCase()
+                );
+
+            if (!valores.length) {
+                return;
+            }
+
+            const coluna =
+                filtro.closest('th')
+                    ?.cellIndex;
+
+            if (
+                coluna === undefined
+            ) {
+                return;
+            }
+
+            const texto =
+                (
+                    linha.cells[
+                        coluna
+                    ]?.textContent || ''
+                )
+                    .trim()
+                    .toLowerCase();
+
+            if (
+                !valores.includes(
+                    texto
+                )
+            ) {
+                mostrar = false;
+            }
+
+        });
+
+        linha.style.display =
+            mostrar
+                ? ''
+                : 'none';
+    });
+}
+
 function showMod(mod) {
 
     currentMod = mod;
