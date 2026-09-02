@@ -4437,17 +4437,6 @@ function novaPropostaOrcamento() {
         return;
     }
 
-    if (
-        !orcamentoAnoSelecionado
-    ) {
-
-        alert(
-            'Selecione primeiro um ano para criar a proposta.'
-        );
-
-        return;
-    }
-
     editingOrcamentoId = null;
 
     document.getElementById(
@@ -4457,8 +4446,7 @@ function novaPropostaOrcamento() {
 
     document.getElementById(
         'orc-ano'
-    ).value =
-        orcamentoAnoSelecionado;
+    ).value = '';
 
     document.getElementById(
         'orc-num'
@@ -10022,14 +10010,14 @@ window.onload = () => {
         <div>
             <label>Ano *</label>
 
-            <input
-                type="number"
-                id="orc-ano"
-                min="2000"
-                max="2100"
-                step="1"
-                readonly
-            >
+            <select
+			    id="orc-ano"
+			    required
+			>
+			    <option value="">
+			        Selecione o ano
+			    </option>
+			</select>
         </div>
 
         <div>
