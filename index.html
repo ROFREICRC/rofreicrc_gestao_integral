@@ -916,6 +916,7 @@
 .apu-grid td.apu-note-red { border-left:4px solid #dc2626; }
 .apu-grid td.apu-note-green { background:#e3f4e8 !important; }
 .apu-grid td.apu-note-blue { background:#e2eefb !important; }
+.apu-grid td.apu-measure-cad { background:#fff2a8 !important; }
 .apu-statusbar { display:flex; gap:15px; justify-content:flex-end; padding:4px 8px; border-top:1px solid #bbc4cd; background:#f3f4f6; font-size:10px; }
 .apu-summary-strip { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:7px; }
 .apu-summary-box { border:1px solid #c6cdd5; background:#f8fafc; padding:6px 9px; min-width:130px; font-size:10px; }
@@ -5802,28 +5803,77 @@ function apuDefaultProject(nome='Novo Orçamento') {
             cliente:'', obra:'', local:'', data:new Date().toISOString().slice(0,10), observacoes:'',
             ultimoutilizador:'', verificadopor:'', memoriadescritiva:''
         },
-        grupos: [],
+
+        /* VisualOrc mantém sempre um grupo geral. */
+        grupos: [{id:'geral', nome:'geral', sistema:true}],
+
         precosDirectos: [],
         recursos: [],
         actividades: [],
         artigos: [],
+
+        /* O modo de medição é global da vista, não pertence a cada linha. */
         medicoes: [],
-        margensDiferenciais: {materiais:1, maoObra:1, tarefeiros:1, subempreitadas:1, equipamentos:1, precosDirectos:1},
+        medicaoModo: 'verificacao',
+
+        margensDiferenciais: {
+            materiais:1,
+            maoObra:1,
+            tarefeiros:1,
+            subempreitadas:1,
+            equipamentos:1,
+            precosDirectos:1
+        },
         margensCapitulos: {},
-        indiretos: {fixos:[], percentuais:[], lucro:1},
+        indiretos: {
+            fixos:[],
+            percentuais:[],
+            actividades:[],
+            recursos:[],
+            administrativos:0,
+            garantias:0,
+            margemComercial:1,
+            lucro:1
+        },
+
         mapasComparativos: [],
         compras: [],
+
+        /*
+          Autos passam a guardar:
+          - propriedades de cada auto;
+          - uma cópia independente dos artigos;
+          - quantidades faturadas por auto.
+        */
         autos: [],
+        autosArtigos: [],
+
         trabalhosAMais: [],
-        reorcamento: [],
+        reorcamento: {
+            artigos:[],
+            recursos:[],
+            actividades:[],
+            precosDirectos:[],
+            medicoes:[]
+        },
+
         custos: [],
         faturas: [],
+
         planeamentos: [],
+        planeamentoConfig: {
+            dataInicio:'',
+            prazoContratual:0
+        },
         planoTrabalhos: [],
         planoRecursos: [],
         planoPagamentos: [],
         planoCompras: [],
         planeamentoSemanal: [],
+
+        /* memoriza os recursos de M.O. usados pelo comando Mat+M.O. */
+        matMOResourceIds: [],
+
         criadoEm: new Date().toISOString(),
         editadoEm: new Date().toISOString(),
         u_crea: user?.u || '',
@@ -5923,14 +5973,26 @@ function apuMeasurementValue(m) {
     return np*c*l*a;
 }
 
-function apuRecalcMeasurements() {
-    const p = apuProject(); if(!p) return;
-    p.medicoes.forEach(m => m.quantidade = apuMeasurementValue(m));
-    const byArticle = {};
-    p.medicoes.filter(m=>m.modo==='substituicao').forEach(m=>{
+function apuRecalcMeasurements(){
+    const p=apuProject();
+    if(!p)return;
+
+    p.medicoes.forEach(m=>{
+        m.quantidade=apuMeasurementValue(m);
+        delete m.modo;
+    });
+
+    if(p.medicaoModo!=='substituicao')return;
+
+    const byArticle={};
+    p.medicoes.forEach(m=>{
         byArticle[m.artigoId]=(byArticle[m.artigoId]||0)+apuNum(m.quantidade);
     });
-    Object.entries(byArticle).forEach(([id,q])=>{ const a=apuGetArticle(id); if(a) a.quantidade=q; });
+
+    Object.entries(byArticle).forEach(([id,q])=>{
+        const a=apuGetArticle(id);
+        if(a)a.quantidade=q;
+    });
 }
 
 function apuResourceTotals() {
@@ -5952,26 +6014,99 @@ function apuResourceTotals() {
     return out;
 }
 
-function apuApplyDifferentialMargins() {
-    const p=apuProject(); if(!p) return;
-    const d=p.margensDiferenciais;
-    p.artigos.filter(a=>!a.bold).forEach(a=>{
-        const custo=apuArticleCost(a);
-        if(custo<=0){a.margem=1;return;}
-        let venda=0;
-        (a.recursos||[]).forEach(c=>{
-            const r=apuGetResource(c.recursoId); if(!r)return;
-            const base=apuNum(c.quantidade)*apuNum(r.precounitario);
-            const k=({1:d.materiais,2:d.maoObra,3:d.tarefeiros,4:d.subempreitadas,5:d.equipamentos})[r.tipo]||1;
-            venda += base*apuNum(k);
-        });
-        (a.actividades||[]).forEach(c=>{
-            const base=apuNum(c.quantidade)*apuActivityPrice(c.actividadeId,new Set());
-            venda += base; 
-        });
-        if(apuNum(a.precodirecto)>0) venda += apuNum(a.precodirecto)*apuNum(d.precosDirectos||1);
-        a.margem = venda>0 ? venda/custo : 1;
+
+function apuDifferentialKForResource(r,d){
+    return apuNum(({
+        1:d.materiais,
+        2:d.maoObra,
+        3:d.tarefeiros,
+        4:d.subempreitadas,
+        5:d.equipamentos
+    })[r?.tipo] || 1);
+}
+
+function apuDifferentialActivityValues(activityId,d,factor=1,stack=new Set()){
+    if(stack.has(activityId))return {custo:0,venda:0};
+    const a=apuGetActivity(activityId);
+    if(!a)return {custo:0,venda:0};
+
+    const next=new Set(stack);
+    next.add(activityId);
+
+    let custo=0;
+    let venda=0;
+
+    (a.recursos||[]).forEach(c=>{
+        const r=apuGetResource(c.recursoId);
+        if(!r)return;
+        const base=factor*apuNum(c.quantidade)*apuNum(r.precounitario);
+        custo+=base;
+        venda+=base*apuDifferentialKForResource(r,d);
     });
+
+    (a.actividades||[]).forEach(c=>{
+        const v=apuDifferentialActivityValues(
+            c.actividadeId,
+            d,
+            factor*apuNum(c.quantidade),
+            next
+        );
+        custo+=v.custo;
+        venda+=v.venda;
+    });
+
+    return {custo,venda};
+}
+
+function apuDifferentialArticleValues(article,d){
+    let custo=0;
+    let venda=0;
+
+    (article.recursos||[]).forEach(c=>{
+        const r=apuGetResource(c.recursoId);
+        if(!r)return;
+        const base=apuNum(c.quantidade)*apuNum(r.precounitario);
+        custo+=base;
+        venda+=base*apuDifferentialKForResource(r,d);
+    });
+
+    (article.actividades||[]).forEach(c=>{
+        const v=apuDifferentialActivityValues(
+            c.actividadeId,
+            d,
+            apuNum(c.quantidade),
+            new Set()
+        );
+        custo+=v.custo;
+        venda+=v.venda;
+    });
+
+    if(apuNum(article.precodirecto)>0){
+        const base=apuNum(article.precodirecto);
+        custo+=base;
+        venda+=base*apuNum(d.precosDirectos||1);
+    }
+
+    return {custo,venda};
+}
+
+function apuApplyDifferentialMargins(){
+    const p=apuProject();
+    if(!p)return;
+
+    const d=p.margensDiferenciais;
+
+    p.artigos
+        .filter(a=>!a.bold)
+        .forEach(a=>{
+            const v=apuDifferentialArticleValues(a,d);
+            a.margem=v.custo>0 ? v.venda/v.custo : 1;
+        });
+
+    /*
+      Tal como no VisualOrc, a operação exporta o K resultante para a LPU.
+      Alterações posteriores nesta janela não recalculam os artigos até voltar a Aplicar.
+    */
     apuSave(false);
     apuRender();
 }
@@ -5985,12 +6120,7 @@ function apuApplyChapterMargins() {
     apuSave(false); apuRender();
 }
 
-function apuInit() {
-    const root=document.getElementById('apu-root'); if(!root) return;
-    if(!APU_UI.projectId && DB.apu.length) APU_UI.projectId=DB.apu[0].id;
-    root.innerHTML = apuShellHtml();
-    apuRender();
-}
+
 
 function apuShellHtml() {
     const p=apuProject();
@@ -6076,30 +6206,61 @@ function apuViewHeader(title,subtitle='',tools=''){return `<div class="apu-view-
 function apuBottom(buttons){return `<div class="apu-bottom-toolbar">${buttons}</div>`;}
 function apuTable(headers,rows){return `<div class="apu-grid-wrap"><table class="apu-grid"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows||`<tr><td colspan="${headers.length}"><div class="apu-empty">Sem registos</div></td></tr>`}</tbody></table></div>`;}
 
-function apuViewLpu(){
- const p=apuProject(); const view=APU_UI.lpuView;
- let headers=[];
- if(view==='normal')headers=['Art.','Descrição','Un.','Quantidade','P. Artigo','P. Total'];
- if(view==='margens')headers=['Art.','Descrição','Un.','Quantidade','P. Custo','Margem','P. Artigo','P. Total'];
- if(view==='diretos')headers=['Art.','Descrição','Un.','Quantidade','Tipo de P. Direto','P. Direto','P. Artigo','P. Total'];
- const rows=p.artigos.slice().sort((a,b)=>apuNum(a.ordem)-apuNum(b.ordem)).map(a=>{
-   const sel=APU_UI.selectedArticleId===a.id?'selected':'';
-   const chapter=a.bold?'apu-chapter':'';
-   const noteClass=(a.observacoes||'').includes('!')?'apu-note-green':(a.observacoes||'').includes('?')?'apu-note-blue':a.observacoes?'apu-note-red':'';
-   const priceClass=apuNum(a.precodirecto)>0 && apuArticleComposedPrice(a)>0?'apu-price-mixed':apuNum(a.precodirecto)>0?'apu-price-direct':'';
-   const base=[`<td>${apuEsc(a.art)}</td>`,`<td class="${noteClass} ${a.revisao?'apu-review':''}">${apuEsc(a.descricao)}</td>`,`<td>${apuEsc(a.unidade)}</td>`,`<td class="num">${a.bold?'':apuNum(a.quantidade).toLocaleString('pt-PT',{maximumFractionDigits:4})}</td>`];
-   if(view==='normal')base.push(`<td class="num ${priceClass}">${a.bold?'':apuMoney(apuArticleUnitPrice(a))}</td>`,`<td class="num">${a.bold?'':apuMoney(apuArticleTotal(a))}</td>`);
-   if(view==='margens')base.push(`<td class="num">${a.bold?'':apuMoney(apuArticleCost(a))}</td>`,`<td class="num">${a.bold?'':apuNum(a.margem||1).toFixed(3)}</td>`,`<td class="num ${priceClass}">${a.bold?'':apuMoney(apuArticleUnitPrice(a))}</td>`,`<td class="num">${a.bold?'':apuMoney(apuArticleTotal(a))}</td>`);
-   if(view==='diretos'){const tipo=p.precosDirectos.find(x=>x.id===a.tipoprecodirecto)?.nome||'';base.push(`<td>${apuEsc(tipo)}</td>`,`<td class="num apu-price-direct">${a.bold?'':(apuNum(a.precodirecto)?apuMoney(a.precodirecto):'')}</td>`,`<td class="num ${priceClass}">${a.bold?'':apuMoney(apuArticleUnitPrice(a))}</td>`,`<td class="num">${a.bold?'':apuMoney(apuArticleTotal(a))}</td>`);}
-   return `<tr class="${sel} ${chapter}" onclick="apuSelectArticle('${a.id}')" ondblclick="apuOpenArticleComposition('${a.id}')" oncontextmenu="return apuArticleContext(event,'${a.id}')">${base.join('')}</tr>`;
- }).join('');
- const total=p.artigos.filter(a=>!a.bold).reduce((s,a)=>s+apuArticleTotal(a),0);
- const bottom=`<button class="apu-tool danger" onclick="apuDeleteArticle()">Eliminar Artigo</button><button class="apu-tool" onclick="apuInsertArticle()">Inserir Artigo</button><button class="apu-tool" onclick="apuNewArticle()">Novo Artigo</button>${view==='diretos'?'<button class="apu-tool" onclick="apuPasteDirectPrices()">Colar Preços Diretos</button>':''}<span style="margin-left:auto;font-weight:bold">Total do Orçamento: ${apuMoney(total)}</span>`;
- return `${apuViewHeader('Lista de Preços Unitários',`Vista ${view==='normal'?'normal':view==='margens'?'de margens':'de preços diretos'}`)}<div class="apu-view-content">${apuTable(headers,rows)}</div>${apuBottom(bottom)}`;
-}
+
 
 function apuSelectArticle(id){APU_UI.selectedArticleId=id;apuRender();}
-function apuNewArticle(){apuArticleDialog(null,false);}
+function apuNewArticle(){
+    const p=apuProject();
+    if(!p)return;
+
+    apuDialog(
+        'Novo Artigo',
+        `<div class="apu-form-grid">
+            <div>
+                <label>Número de novos artigos (1 a 40)</label>
+                <input id="apu-new-art-count" type="number" min="1" max="40" value="1">
+            </div>
+        </div>`,
+        ()=>{
+            let n=Math.trunc(apuNum(document.getElementById('apu-new-art-count').value));
+            if(n<1||n>40)return alert('Introduza um número entre 1 e 40.');
+
+            let ordem=p.artigos.length
+                ? Math.max(...p.artigos.map(x=>apuNum(x.ordem)))+1
+                : 1;
+
+            const criados=[];
+            for(let i=0;i<n;i++){
+                const a={
+                    id:apuUid('art'),
+                    ordem:ordem+i,
+                    art:'',
+                    descricao:'',
+                    unidade:'',
+                    quantidade:0,
+                    margem:1,
+                    capitulo:0,
+                    bold:false,
+                    precodirecto:0,
+                    tipoprecodirecto:null,
+                    quantidadeeo:0,
+                    quantidadereal:0,
+                    observacoes:'',
+                    revisao:0,
+                    recursos:[],
+                    actividades:[]
+                };
+                p.artigos.push(a);
+                criados.push(a);
+            }
+
+            APU_UI.selectedArticleId=criados[0]?.id||null;
+            apuDialogClose();
+            apuSave(false);
+            apuRender();
+        }
+    );
+}
 function apuInsertArticle(){apuArticleDialog(null,true);}
 function apuEditArticle(){if(!APU_UI.selectedArticleId)return alert('Selecione um artigo.');apuArticleDialog(APU_UI.selectedArticleId,false);}
 function apuDeleteArticle(){const p=apuProject();const id=APU_UI.selectedArticleId;if(!id)return alert('Selecione um artigo.');if(!confirm('Eliminar o artigo selecionado?'))return;p.artigos=p.artigos.filter(a=>a.id!==id);p.medicoes=p.medicoes.filter(m=>m.artigoId!==id);APU_UI.selectedArticleId=null;apuSave(false);apuRender();}
@@ -6117,134 +6278,712 @@ function apuArticleDialog(id,insertAtSelection){
  </div>`,()=>{x.art=document.getElementById('apu-art-art').value;x.unidade=document.getElementById('apu-art-un').value;x.quantidade=apuNum(document.getElementById('apu-art-q').value);x.margem=apuNum(document.getElementById('apu-art-k').value)||1;x.descricao=document.getElementById('apu-art-desc').value;x.capitulo=apuNum(document.getElementById('apu-art-cap').value);x.tipoprecodirecto=document.getElementById('apu-art-tpd').value||null;x.precodirecto=apuNum(document.getElementById('apu-art-pd').value);x.revisao=apuNum(document.getElementById('apu-art-rev').value);x.bold=document.getElementById('apu-art-bold').value==='1';x.observacoes=document.getElementById('apu-art-obs').value;x.ordem=apuNum(document.getElementById('apu-art-ord').value);if(!old)p.artigos.push(x);p.artigos.sort((a,b)=>apuNum(a.ordem)-apuNum(b.ordem));p.artigos.forEach((a,i)=>a.ordem=i+1);APU_UI.selectedArticleId=x.id;apuDialogClose();apuSave(false);apuRender();});
 }
 
-function apuOpenArticleComposition(id){APU_UI.selectedArticleId=id;APU_UI.view='composicao';document.getElementById('apu-main-view').innerHTML=apuViewComposition();apuUpdateStatus();}
-function apuViewComposition(){
- const a=apuGetArticle(APU_UI.selectedArticleId); if(!a)return apuNoProjectHtml();
- const rows=[];
- (a.actividades||[]).forEach((c,i)=>{const x=apuGetActivity(c.actividadeId);rows.push(`<tr><td>Ativ.</td><td>${apuEsc(x?.id||'')}</td><td>${apuEsc(x?.nome||'')}</td><td>${apuEsc(x?.unidade||'')}</td><td class="num">${apuNum(c.quantidade)}</td><td class="num">${apuMoney(apuActivityPrice(c.actividadeId,new Set()))}</td><td class="num">${apuMoney(apuNum(c.quantidade)*apuActivityPrice(c.actividadeId,new Set()))}</td><td><button class="apu-tool danger" onclick="apuRemoveArticleActivity(${i})">X</button></td></tr>`);});
- (a.recursos||[]).forEach((c,i)=>{const x=apuGetResource(c.recursoId);rows.push(`<tr><td>Rec.</td><td>${apuEsc(x?.id||'')}</td><td>${apuEsc(x?.nome||'')}</td><td>${apuEsc(x?.unidade||'')}</td><td class="num">${apuNum(c.quantidade)}</td><td class="num">${apuMoney(x?.precounitario)}</td><td class="num">${apuMoney(apuNum(c.quantidade)*apuNum(x?.precounitario))}</td><td><button class="apu-tool danger" onclick="apuRemoveArticleResource(${i})">X</button></td></tr>`);});
- const tools=`<button class="apu-tool danger" onclick="apuDeleteSelectedCompositionItem()">Elimina</button><button class="apu-tool" onclick="apuInsertActivityToArticle(false,false)">Inserir Ativ</button><button class="apu-tool" onclick="apuInsertActivityToArticle(true,false)">Inserir Ativ +</button><button class="apu-tool" onclick="apuInsertActivityToArticle(true,true)">Inserir Ativ ++</button><button class="apu-tool" onclick="apuInsertResourceToArticle(false,false)">Inserir Rec</button><button class="apu-tool" onclick="apuInsertResourceToArticle(true,false)">Inserir Rec +</button><button class="apu-tool" onclick="apuInsertResourceToArticle(true,true)">Inserir Rec ++</button><button class="apu-tool" onclick="apuShowArticleInfo()">Inf.</button><button class="apu-tool" onclick="apuToggleArticleReview()">Artigo em revisão</button><button class="apu-tool" onclick="apuArticleObservation()">Observ.</button><button class="apu-tool" onclick="apuEditArticle()">Texto Art.</button>`;
- return `${apuViewHeader('Composição de preços do artigo',`${apuEsc(a.art)} - ${apuEsc(a.descricao)}`)}<div class="apu-toolbar-main">${tools}</div><div class="apu-view-content">${apuTable(['Tipo','Código','Descrição','Un.','Quantidade','P. Unitário','P. Total',''],rows.join(''))}</div>${apuBottom(`<button class="apu-tool" onclick="apuSetView('lpu')">Sair</button><span style="margin-left:auto;font-weight:bold">P. Artigo: ${apuMoney(apuArticleUnitPrice(a))}</span>`)}`;
-}
 
-function apuInsertActivityToArticle(createNew,quick){const a=apuGetArticle(APU_UI.selectedArticleId);if(!a)return;if(createNew){const act={id:apuUid('act'),grupo:null,nome:quick?a.descricao:'Nova atividade',unidade:a.unidade||'',recursos:[],actividades:[]};apuProject().actividades.push(act);a.actividades.push({actividadeId:act.id,quantidade:1});apuSave(false);apuRenderCompositionNow();return;}apuPickActivity(id=>{a.actividades.push({actividadeId:id,quantidade:1});apuSave(false);apuRenderCompositionNow();});}
-function apuInsertResourceToArticle(createNew,quick){const a=apuGetArticle(APU_UI.selectedArticleId);if(!a)return;if(createNew){const rec={id:apuUid('rec'),grupo:null,tipo:quick?4:1,nome:quick?a.descricao:'Novo recurso',unidade:a.unidade||'',precounitario:0,data:new Date().toISOString().slice(0,10)};apuProject().recursos.push(rec);a.recursos.push({recursoId:rec.id,quantidade:1});apuSave(false);apuRenderCompositionNow();return;}apuPickResource(id=>{a.recursos.push({recursoId:id,quantidade:1});apuSave(false);apuRenderCompositionNow();});}
-function apuRemoveArticleActivity(i){const a=apuGetArticle(APU_UI.selectedArticleId);a.actividades.splice(i,1);apuSave(false);apuRenderCompositionNow();}
-function apuRemoveArticleResource(i){const a=apuGetArticle(APU_UI.selectedArticleId);a.recursos.splice(i,1);apuSave(false);apuRenderCompositionNow();}
-function apuRenderCompositionNow(){document.getElementById('apu-main-view').innerHTML=apuViewComposition();apuUpdateStatus();}
-function apuDeleteSelectedCompositionItem(){alert('Selecione a linha a eliminar através do botão X da respetiva linha.');}
+
+
+
+
+
+
+
+
 function apuShowArticleInfo(){const a=apuGetArticle(APU_UI.selectedArticleId);alert(`P. Custo: ${apuMoney(apuArticleCost(a))}\nMargem: ${apuNum(a.margem||1).toFixed(3)}\nP. Artigo: ${apuMoney(apuArticleUnitPrice(a))}`);}
 function apuToggleArticleReview(){const a=apuGetArticle(APU_UI.selectedArticleId);a.revisao=a.revisao?0:1;apuSave(false);apuRenderCompositionNow();}
 function apuArticleObservation(){const a=apuGetArticle(APU_UI.selectedArticleId);const v=prompt('Observações:',a.observacoes||'');if(v!==null){a.observacoes=v;apuSave(false);apuRenderCompositionNow();}}
 
-function apuViewResources(){
- const p=apuProject(); const totals=apuResourceTotals();
- const rows=p.recursos.slice().sort((a,b)=>(a.grupo||'').toString().localeCompare((b.grupo||'').toString())||a.nome.localeCompare(b.nome)).map(r=>`<tr class="${APU_UI.selectedResourceId===r.id?'selected':''}" onclick="APU_UI.selectedResourceId='${r.id}';apuRender()" ondblclick="apuEditResource('${r.id}')" oncontextmenu="return apuResourceContext(event,'${r.id}')"><td>${apuEsc(apuResourceTypeLabel(r.tipo))}</td><td>${apuEsc(r.nome)}</td><td>${apuEsc(r.unidade)}</td><td class="num">${apuNum(totals[r.id]?.q).toLocaleString('pt-PT',{maximumFractionDigits:4})}</td><td class="num">${apuMoney(r.precounitario)}</td><td class="num">${apuMoney(totals[r.id]?.total)}</td><td>${apuEsc(r.data||'')}</td></tr>`).join('');
- return `${apuViewHeader('Lista de Recursos','Quantidade total utilizada no orçamento, preço unitário e preço total')}<div class="apu-view-content">${apuTable(['Tipo','Descrição','Un.','Quant. total','P. Unit','P. Total','Data do registo'],rows)}</div>${apuBottom(`<button class="apu-tool danger" onclick="apuDeleteResource()">Eliminar Rec.</button><button class="apu-tool" onclick="apuEditResource()">Inserir Rec.</button><button class="apu-tool" onclick="apuSortResourcesByTotal()">Ordenar p/ total</button>`)}`;
-}
-function apuEditResource(id=null){const p=apuProject();const x=id?apuGetResource(id):{id:apuUid('rec'),grupo:null,tipo:1,nome:'',unidade:'',precounitario:0,data:new Date().toISOString().slice(0,10)};apuDialog(id?'Editar recurso':'Inserir Recurso',`<div class="apu-form-grid"><div><label>Tipo</label><select id="apu-r-tipo">${[1,2,3,4,5].map(t=>`<option value="${t}" ${x.tipo===t?'selected':''}>${apuResourceTypeLabel(t)}</option>`).join('')}</select></div><div><label>Unidade</label><input id="apu-r-un" value="${apuEsc(x.unidade)}"></div><div><label>P. Unitário</label><input id="apu-r-p" type="number" step="0.0001" value="${apuNum(x.precounitario)}"></div><div><label>Data</label><input id="apu-r-data" value="${apuEsc(x.data)}"></div><div class="apu-form-span-4"><label>Descrição</label><input id="apu-r-nome" value="${apuEsc(x.nome)}"></div></div>`,()=>{x.tipo=apuNum(document.getElementById('apu-r-tipo').value);x.unidade=document.getElementById('apu-r-un').value;x.precounitario=apuNum(document.getElementById('apu-r-p').value);x.data=document.getElementById('apu-r-data').value;x.nome=document.getElementById('apu-r-nome').value;if(!id)p.recursos.push(x);APU_UI.selectedResourceId=x.id;apuDialogClose();apuSave(false);apuRender();});}
-function apuDeleteResource(){const p=apuProject();const id=APU_UI.selectedResourceId;if(!id)return alert('Selecione um recurso.');const used=p.artigos.some(a=>(a.recursos||[]).some(c=>c.recursoId===id))||p.actividades.some(a=>(a.recursos||[]).some(c=>c.recursoId===id));if(used&&!confirm('O recurso está em utilização no orçamento. Deseja eliminá-lo?'))return;p.recursos=p.recursos.filter(x=>x.id!==id);p.artigos.forEach(a=>a.recursos=(a.recursos||[]).filter(c=>c.recursoId!==id));p.actividades.forEach(a=>a.recursos=(a.recursos||[]).filter(c=>c.recursoId!==id));APU_UI.selectedResourceId=null;apuSave(false);apuRender();}
-function apuSortResourcesByTotal(){const p=apuProject(),t=apuResourceTotals();p.recursos.sort((a,b)=>apuNum(t[b.id]?.total)-apuNum(t[a.id]?.total));apuRender();}
 
-function apuViewActivities(){const p=apuProject();const rows=p.actividades.map(a=>{const q=apuActivityTotalUsage(a.id);const pu=apuActivityPrice(a.id,new Set());return `<tr class="${APU_UI.selectedActivityId===a.id?'selected':''}" onclick="APU_UI.selectedActivityId='${a.id}';apuRender()" ondblclick="apuOpenActivityComposition('${a.id}')" oncontextmenu="return apuActivityContext(event,'${a.id}')"><td>${apuEsc(a.nome)}</td><td>${apuEsc(a.unidade)}</td><td class="num">${q.toLocaleString('pt-PT',{maximumFractionDigits:4})}</td><td class="num">${apuMoney(pu)}</td><td class="num">${apuMoney(q*pu)}</td></tr>`}).join('');return `${apuViewHeader('Lista de Atividades','Preços compostos de suporte à orçamentação')}<div class="apu-view-content">${apuTable(['Descrição','Un.','Quant. total','P. Unit','P. Total'],rows)}</div>${apuBottom(`<button class="apu-tool danger" onclick="apuDeleteActivity()">Eliminar Atividade</button><button class="apu-tool" onclick="apuNewActivity()">Inserir Ativ.</button><button class="apu-tool" onclick="apuSortActivitiesByTotal()">Ordenar p/ total</button>`)}`;}
+function apuEditResource(id=null){
+    const p=apuProject();
+    const x=id
+        ? apuGetResource(id)
+        : {
+            id:apuUid('rec'),
+            grupo:'geral',
+            tipo:1,
+            nome:'',
+            unidade:'',
+            precounitario:0,
+            data:new Date().toISOString().slice(0,10)
+        };
+
+    if(!x)return;
+
+    const grupos = p.grupos
+        .slice()
+        .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-PT'))
+        .map(g=>`<option value="${apuEsc(g.id)}" ${x.grupo===g.id?'selected':''}>${apuEsc(g.nome)}</option>`)
+        .join('');
+
+    apuDialog(
+        id?'Editar recurso':'Inserir Recurso',
+        `<div class="apu-form-grid">
+            <div>
+                <label>Grupo</label>
+                <select id="apu-r-grupo">${grupos}</select>
+            </div>
+            <div>
+                <label>Tipo</label>
+                <select id="apu-r-tipo">
+                    ${[1,2,3,4,5].map(t=>`<option value="${t}" ${x.tipo===t?'selected':''}>${apuResourceTypeLabel(t)}</option>`).join('')}
+                </select>
+            </div>
+            <div>
+                <label>Unidade</label>
+                <input id="apu-r-un" value="${apuEsc(x.unidade)}">
+            </div>
+            <div>
+                <label>P. Unitário</label>
+                <input id="apu-r-p" type="number" step="0.0001" value="${apuNum(x.precounitario)}">
+            </div>
+            <div>
+                <label>Data</label>
+                <input id="apu-r-data" value="${apuEsc(x.data)}">
+            </div>
+            <div class="apu-form-span-4">
+                <label>Descrição</label>
+                <input id="apu-r-nome" value="${apuEsc(x.nome)}">
+            </div>
+        </div>`,
+        ()=>{
+            const grupo=document.getElementById('apu-r-grupo').value;
+            const nome=document.getElementById('apu-r-nome').value.trim();
+            if(!grupo)return alert('Selecione um grupo.');
+            if(!nome)return alert('Introduza a descrição do recurso.');
+
+            x.grupo=grupo;
+            x.tipo=apuNum(document.getElementById('apu-r-tipo').value);
+            x.unidade=document.getElementById('apu-r-un').value;
+            x.precounitario=apuNum(document.getElementById('apu-r-p').value);
+            x.data=document.getElementById('apu-r-data').value;
+            x.nome=nome;
+
+            if(!id)p.recursos.push(x);
+            APU_UI.selectedResourceId=x.id;
+            apuDialogClose();
+            apuSave(false);
+            apuRender();
+        }
+    );
+}
+function apuDeleteResource(){const p=apuProject();const id=APU_UI.selectedResourceId;if(!id)return alert('Selecione um recurso.');const used=p.artigos.some(a=>(a.recursos||[]).some(c=>c.recursoId===id))||p.actividades.some(a=>(a.recursos||[]).some(c=>c.recursoId===id));if(used&&!confirm('O recurso está em utilização no orçamento. Deseja eliminá-lo?'))return;p.recursos=p.recursos.filter(x=>x.id!==id);p.artigos.forEach(a=>a.recursos=(a.recursos||[]).filter(c=>c.recursoId!==id));p.actividades.forEach(a=>a.recursos=(a.recursos||[]).filter(c=>c.recursoId!==id));APU_UI.selectedResourceId=null;apuSave(false);apuRender();}
+function apuSortResourcesByTotal(){
+    APU_UI.resourceSort = APU_UI.resourceSort==='total' ? 'grupo' : 'total';
+    apuRender();
+}
+
+
 function apuActivityTotalUsage(id){const p=apuProject();let q=0;p.artigos.forEach(a=>(a.actividades||[]).forEach(c=>{if(c.actividadeId===id)q+=apuNum(a.quantidade)*apuNum(c.quantidade)}));p.actividades.forEach(a=>(a.actividades||[]).forEach(c=>{if(c.actividadeId===id)q+=apuNum(c.quantidade)}));return q;}
 function apuNewActivity(){apuActivityDialog();}
-function apuActivityDialog(id=null){const p=apuProject();const x=id?apuGetActivity(id):{id:apuUid('act'),grupo:null,nome:'',unidade:'',recursos:[],actividades:[]};apuDialog(id?'Editar atividade':'Inserir Atividade',`<div class="apu-form-grid"><div class="apu-form-span-2"><label>Descrição</label><input id="apu-a-nome" value="${apuEsc(x.nome)}"></div><div><label>Unidade</label><input id="apu-a-un" value="${apuEsc(x.unidade)}"></div></div>`,()=>{x.nome=document.getElementById('apu-a-nome').value;x.unidade=document.getElementById('apu-a-un').value;if(!id)p.actividades.push(x);APU_UI.selectedActivityId=x.id;apuDialogClose();apuSave(false);apuRender();});}
+function apuActivityDialog(id=null){
+    const p=apuProject();
+    const x=id
+        ? apuGetActivity(id)
+        : {id:apuUid('act'),grupo:'geral',nome:'',unidade:'',recursos:[],actividades:[]};
+
+    if(!x)return;
+
+    const grupos=p.grupos
+        .slice()
+        .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-PT'))
+        .map(g=>`<option value="${apuEsc(g.id)}" ${x.grupo===g.id?'selected':''}>${apuEsc(g.nome)}</option>`)
+        .join('');
+
+    apuDialog(
+        id?'Editar atividade':'Inserir Atividade',
+        `<div class="apu-form-grid">
+            <div>
+                <label>Grupo</label>
+                <select id="apu-a-grupo">${grupos}</select>
+            </div>
+            <div>
+                <label>Unidade</label>
+                <input id="apu-a-un" value="${apuEsc(x.unidade)}">
+            </div>
+            <div class="apu-form-span-2">
+                <label>Descrição</label>
+                <input id="apu-a-nome" value="${apuEsc(x.nome)}">
+            </div>
+        </div>`,
+        ()=>{
+            const grupo=document.getElementById('apu-a-grupo').value;
+            const nome=document.getElementById('apu-a-nome').value.trim();
+            if(!grupo)return alert('Selecione um grupo.');
+            if(!nome)return alert('Introduza a descrição da atividade.');
+
+            x.grupo=grupo;
+            x.nome=nome;
+            x.unidade=document.getElementById('apu-a-un').value;
+
+            if(!id)p.actividades.push(x);
+            APU_UI.selectedActivityId=x.id;
+            apuDialogClose();
+            apuSave(false);
+            apuRender();
+        }
+    );
+}
 function apuDeleteActivity(){const p=apuProject(),id=APU_UI.selectedActivityId;if(!id)return alert('Selecione uma atividade.');const used=p.artigos.some(a=>(a.actividades||[]).some(c=>c.actividadeId===id))||p.actividades.some(a=>(a.actividades||[]).some(c=>c.actividadeId===id));if(used&&!confirm('A atividade está em utilização no orçamento. Deseja eliminá-la?'))return;p.actividades=p.actividades.filter(x=>x.id!==id);p.artigos.forEach(a=>a.actividades=(a.actividades||[]).filter(c=>c.actividadeId!==id));p.actividades.forEach(a=>a.actividades=(a.actividades||[]).filter(c=>c.actividadeId!==id));APU_UI.selectedActivityId=null;apuSave(false);apuRender();}
-function apuSortActivitiesByTotal(){const p=apuProject();p.actividades.sort((a,b)=>apuActivityTotalUsage(b.id)*apuActivityPrice(b.id,new Set())-apuActivityTotalUsage(a.id)*apuActivityPrice(a.id,new Set()));apuRender();}
-function apuOpenActivityComposition(id){APU_UI.selectedActivityId=id;document.getElementById('apu-main-view').innerHTML=apuViewActivityComposition();}
-function apuViewActivityComposition(){const a=apuGetActivity(APU_UI.selectedActivityId);if(!a)return'';const rows=[];(a.actividades||[]).forEach((c,i)=>{const x=apuGetActivity(c.actividadeId);rows.push(`<tr><td>Ativ.</td><td>${apuEsc(x?.nome)}</td><td>${apuEsc(x?.unidade)}</td><td class="num">${apuNum(c.quantidade)}</td><td class="num">${apuMoney(apuActivityPrice(c.actividadeId,new Set()))}</td><td><button class="apu-tool danger" onclick="apuRemoveActivityActivity(${i})">X</button></td></tr>`)});(a.recursos||[]).forEach((c,i)=>{const r=apuGetResource(c.recursoId);rows.push(`<tr><td>Rec.</td><td>${apuEsc(r?.nome)}</td><td>${apuEsc(r?.unidade)}</td><td class="num">${apuNum(c.quantidade)}</td><td class="num">${apuMoney(r?.precounitario)}</td><td><button class="apu-tool danger" onclick="apuRemoveActivityResource(${i})">X</button></td></tr>`)});return `${apuViewHeader('Composição de preços da atividade',apuEsc(a.nome))}<div class="apu-toolbar-main"><button class="apu-tool" onclick="apuAddResourceToActivity()">Inserir recursos</button><button class="apu-tool" onclick="apuAddActivityToActivity()">Inserir atividade</button><button class="apu-tool" onclick="apuActivityDialog('${a.id}')">Editar atividade</button></div><div class="apu-view-content">${apuTable(['Tipo','Descrição','Un.','Quantidade','P. Unit.',''],rows.join(''))}</div>${apuBottom(`<button class="apu-tool" onclick="apuSetView('actividades')">Sair</button><span style="margin-left:auto;font-weight:bold">P. Unit.: ${apuMoney(apuActivityPrice(a.id,new Set()))}</span>`)}`;}
+function apuSortActivitiesByTotal(){
+    APU_UI.activitySort = APU_UI.activitySort==='total' ? 'grupo' : 'total';
+    apuRender();
+}
+
+
 function apuAddResourceToActivity(){const a=apuGetActivity(APU_UI.selectedActivityId);apuPickResource(id=>{a.recursos.push({recursoId:id,quantidade:1});apuSave(false);apuOpenActivityComposition(a.id);});}
-function apuAddActivityToActivity(){const a=apuGetActivity(APU_UI.selectedActivityId);apuPickActivity(id=>{if(id===a.id)return alert('Uma atividade não pode conter-se a si própria.');a.actividades.push({actividadeId:id,quantidade:1});apuSave(false);apuOpenActivityComposition(a.id);});}
+
 function apuRemoveActivityResource(i){const a=apuGetActivity(APU_UI.selectedActivityId);a.recursos.splice(i,1);apuSave(false);apuOpenActivityComposition(a.id);}
 function apuRemoveActivityActivity(i){const a=apuGetActivity(APU_UI.selectedActivityId);a.actividades.splice(i,1);apuSave(false);apuOpenActivityComposition(a.id);}
 
-function apuPickResource(cb){const p=apuProject();apuPicker('Selecionar Recursos',p.recursos.map(r=>({id:r.id,label:`${apuResourceTypeLabel(r.tipo)} | ${r.nome} | ${r.unidade} | ${apuMoney(r.precounitario)}`})),cb);}
-function apuPickActivity(cb){const p=apuProject();apuPicker('Selecionar Atividades',p.actividades.map(a=>({id:a.id,label:`${a.nome} | ${a.unidade} | ${apuMoney(apuActivityPrice(a.id,new Set()))}`})),cb);}
+
+function apuOpenInsertSelector(kind,cb,source='orcamento'){
+    const p=apuProject();
+    if(!p)return;
+
+    window.__apuInsertSelectorCb=cb;
+    window.__apuInsertSelectorKind=kind;
+    window.__apuInsertSelectorSource=source;
+
+    const title=kind==='recursos'?'Inserir Recursos':'Inserir Atividades';
+    const grupos=p.grupos
+        .slice()
+        .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-PT'))
+        .map(g=>`<option value="${apuEsc(g.id)}">${apuEsc(g.nome)}</option>`)
+        .join('');
+
+    apuDialog(
+        title,
+        `<div class="apu-toolbar-main" style="margin:-10px -10px 8px">
+            <button class="apu-tool ${source==='orcamento'?'active':''}" onclick="apuInsertSelectorSource('orcamento')">Orçamento</button>
+            <button class="apu-tool ${source==='bdd'?'active':''}" onclick="apuInsertSelectorSource('bdd')">Base de Dados</button>
+            <button class="apu-tool" onclick="apuInsertSelectorCreateNew()">Criar Novo</button>
+        </div>
+
+        <div class="apu-form-grid" style="grid-template-columns:1fr 1fr auto">
+            <div>
+                <label>Grupo</label>
+                <select id="apu-picker-group" onchange="apuRefreshInsertSelector()">${grupos}</select>
+            </div>
+            <div>
+                <label>Procura</label>
+                <input id="apu-picker-search" oninput="apuRefreshInsertSelector()" placeholder="Pesquisar por nome...">
+            </div>
+            <div style="align-self:end">
+                <label style="display:flex;align-items:center;gap:5px">
+                    <input id="apu-picker-all-groups" type="checkbox" style="width:auto" onchange="apuRefreshInsertSelector()">
+                    Ver todos os grupos
+                </label>
+            </div>
+        </div>
+
+        <div id="apu-picker-results"></div>`,
+        null,
+        false
+    );
+
+    setTimeout(()=>apuRefreshInsertSelector(),0);
+}
+
+function apuInsertSelectorSource(source){
+    window.__apuInsertSelectorSource=source;
+    const cb=window.__apuInsertSelectorCb;
+    const kind=window.__apuInsertSelectorKind;
+    if(source==='bdd'){
+        apuOpenTechnicalDatabaseSelector(kind,cb);
+        return;
+    }
+    apuDialogClose();
+    apuOpenInsertSelector(kind,cb,'orcamento');
+}
+
+function apuRefreshInsertSelector(){
+    const p=apuProject();
+    const kind=window.__apuInsertSelectorKind;
+    const box=document.getElementById('apu-picker-results');
+    if(!p||!box||!kind)return;
+
+    const group=document.getElementById('apu-picker-group')?.value||'geral';
+    const all=document.getElementById('apu-picker-all-groups')?.checked;
+    const q=(document.getElementById('apu-picker-search')?.value||'').trim().toLowerCase();
+
+    const list=(kind==='recursos'?p.recursos:p.actividades)
+        .filter(x=>(all||x.grupo===group) && (!q||String(x.nome||'').toLowerCase().includes(q)))
+        .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-PT'));
+
+    const rows=list.map(x=>{
+        const price=kind==='recursos'
+            ? apuNum(x.precounitario)
+            : apuActivityPrice(x.id,new Set());
+
+        return `<tr ondblclick="apuChooseInsertSelector('${x.id}')" style="cursor:pointer">
+            <td>${apuEsc(x.nome)}</td>
+            <td>${apuEsc(x.unidade||'')}</td>
+            <td class="num">${apuMoney(price)}</td>
+            <td><button class="apu-tool" onclick="apuChooseInsertSelector('${x.id}')">Selecionar</button></td>
+        </tr>`;
+    }).join('');
+
+    box.innerHTML=apuTable(['Descrição','Un.','P. Unitário',''],rows);
+}
+
+function apuChooseInsertSelector(id){
+    const cb=window.__apuInsertSelectorCb;
+    apuDialogClose();
+    if(typeof cb==='function')cb(id);
+    delete window.__apuInsertSelectorCb;
+    delete window.__apuInsertSelectorKind;
+    delete window.__apuInsertSelectorSource;
+}
+
+function apuInsertSelectorCreateNew(){
+    const kind=window.__apuInsertSelectorKind;
+    const cb=window.__apuInsertSelectorCb;
+
+    apuDialogClose();
+
+    if(kind==='recursos'){
+        const before=new Set(apuProject().recursos.map(x=>x.id));
+        apuEditResource();
+        window.__apuAfterCreateSelector={kind,cb,before};
+    }else{
+        const before=new Set(apuProject().actividades.map(x=>x.id));
+        apuActivityDialog();
+        window.__apuAfterCreateSelector={kind,cb,before};
+    }
+}
+
+async function apuOpenTechnicalDatabaseSelector(kind,cb){
+    apuDialogClose();
+
+    try{
+        const res=await fetch(`/api/apu/bdd/${kind}`);
+        if(!res.ok)throw new Error('HTTP '+res.status);
+        const data=await res.json();
+        const items=Array.isArray(data)?data:(data.items||[]);
+
+        apuDialog(
+            kind==='recursos'?'Recursos da Base de Dados':'Atividades da Base de Dados',
+            `<div class="apu-grid-wrap">
+                <table class="apu-grid">
+                    <tbody>
+                        ${items.map(x=>`<tr ondblclick="apuImportTechnicalDatabaseItem('${kind}','${apuEsc(x.id)}')">
+                            <td>${apuEsc(x.grupo||'')}</td>
+                            <td>${apuEsc(x.nome||x.descricao||'')}</td>
+                            <td>${apuEsc(x.unidade||'')}</td>
+                            <td><button class="apu-tool" onclick="apuImportTechnicalDatabaseItem('${kind}','${apuEsc(x.id)}')">Importar</button></td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+            </div>`,
+            null,
+            false
+        );
+
+        window.__apuTechnicalDbCb=cb;
+    }catch(e){
+        console.error(e);
+        alert('A Base de Dados Técnica requer o serviço do servidor. O ficheiro .bdd não será armazenado no Firebase.');
+    }
+}
+
+async function apuImportTechnicalDatabaseItem(kind,id){
+    try{
+        const res=await fetch(`/api/apu/bdd/${kind}/${encodeURIComponent(id)}/import`,{method:'POST'});
+        if(!res.ok)throw new Error('HTTP '+res.status);
+        const item=await res.json();
+        const p=apuProject();
+
+        let localId=null;
+        if(kind==='recursos'){
+            const r={
+                id:apuUid('rec'),
+                grupo:item.grupoId||'geral',
+                tipo:apuNum(item.tipo)||1,
+                nome:item.nome||item.descricao||'',
+                unidade:item.unidade||'',
+                precounitario:apuNum(item.precounitario),
+                data:item.data||new Date().toISOString().slice(0,10)
+            };
+            p.recursos.push(r);
+            localId=r.id;
+        }else{
+            const a={
+                id:apuUid('act'),
+                grupo:item.grupoId||'geral',
+                nome:item.nome||item.descricao||'',
+                unidade:item.unidade||'',
+                recursos:Array.isArray(item.recursos)?item.recursos:[],
+                actividades:Array.isArray(item.actividades)?item.actividades:[]
+            };
+            p.actividades.push(a);
+            localId=a.id;
+        }
+
+        apuDialogClose();
+        apuSave(false);
+
+        const cb=window.__apuTechnicalDbCb;
+        delete window.__apuTechnicalDbCb;
+        if(typeof cb==='function')cb(localId);
+        else apuRender();
+    }catch(e){
+        console.error(e);
+        alert('Não foi possível importar o registo da Base de Dados Técnica.');
+    }
+}
+
+function apuPickResource(cb){
+    apuOpenInsertSelector('recursos',cb);
+}
+function apuPickActivity(cb){
+    apuOpenInsertSelector('actividades',cb);
+}
 function apuPicker(title,items,cb){apuDialog(title,items.length?`<div class="apu-grid-wrap"><table class="apu-grid"><tbody>${items.map(x=>`<tr ondblclick="window.__apuPick('${x.id}')" style="cursor:pointer"><td>${apuEsc(x.label)}</td><td><button class="apu-tool" onclick="window.__apuPick('${x.id}')">Selecionar</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="apu-empty">Sem registos disponíveis.</div>',null,false);window.__apuPick=id=>{apuDialogClose();cb(id);delete window.__apuPick;};}
 
-function apuViewDirectPrices(){const p=apuProject();const rows=p.precosDirectos.map(d=>{const total=p.artigos.filter(a=>a.tipoprecodirecto===d.id).reduce((s,a)=>s+apuNum(a.quantidade)*apuNum(a.precodirecto),0);return `<tr class="${APU_UI.selectedDirectPriceId===d.id?'selected':''}" onclick="APU_UI.selectedDirectPriceId='${d.id}';apuRender()"><td>${apuEsc(d.nome)}</td><td class="num">${apuMoney(total)}</td></tr>`}).join('');return `${apuViewHeader('Preços Diretos','Lista e total dos preços diretos existentes no orçamento')}<div class="apu-view-content">${apuTable(['Preço Direto','P. Total'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuNewDirectPrice()">Novo</button><button class="apu-tool danger" onclick="apuDeleteDirectPrice()">Eliminar</button><button class="apu-tool" onclick="apuApplyDirectDiscount()">Aplicar desconto</button>`)}`;}
+
 function apuNewDirectPrice(){const p=apuProject();const n=prompt('Nome do novo Preço Direto:');if(!n)return;p.precosDirectos.push({id:apuUid('pd'),nome:n});apuSave(false);apuRender();}
-function apuDeleteDirectPrice(){const p=apuProject(),id=APU_UI.selectedDirectPriceId;if(!id)return alert('Selecione um preço direto.');if(!confirm('Eliminar o preço direto selecionado?'))return;p.precosDirectos=p.precosDirectos.filter(x=>x.id!==id);p.artigos.forEach(a=>{if(a.tipoprecodirecto===id){a.tipoprecodirecto=null;a.precodirecto=0}});APU_UI.selectedDirectPriceId=null;apuSave(false);apuRender();}
-function apuApplyDirectDiscount(){const p=apuProject(),id=APU_UI.selectedDirectPriceId;if(!id)return alert('Selecione um preço direto.');const d=apuNum(prompt('Desconto em % (-60 a 60):','0'));if(d<-60||d>60)return alert('Desconto deve estar entre -60% e 60%');p.artigos.filter(a=>a.tipoprecodirecto===id).forEach(a=>a.precodirecto=apuNum(a.precodirecto)*(1-d/100));apuSave(false);apuRender();}
+function apuDeleteDirectPrice(){
+    const p=apuProject(),id=APU_UI.selectedDirectPriceId;
+    if(!id)return alert('Selecione um preço direto.');
+
+    const emUso=p.artigos.some(a=>a.tipoprecodirecto===id);
+    if(emUso){
+        return alert('Não é possível eliminar o preço direto porque está em utilização no orçamento.');
+    }
+
+    if(!confirm('Eliminar o preço direto selecionado?'))return;
+    p.precosDirectos=p.precosDirectos.filter(x=>x.id!==id);
+    APU_UI.selectedDirectPriceId=null;
+    apuSave(false);
+    apuRender();
+}
+function apuApplyDirectDiscount(){
+    const p=apuProject(),id=APU_UI.selectedDirectPriceId;
+    if(!id)return alert('Selecione um preço direto.');
+
+    const pd=p.precosDirectos.find(x=>x.id===id);
+    if(!pd)return;
+
+    const raw=prompt('Desconto a Aplicar (-60% a 60%):','0');
+    if(raw===null)return;
+    const d=apuNum(raw);
+    if(d<-60||d>60)return alert('Desconto deve estar entre -60% e 60%');
+
+    p.artigos
+        .filter(a=>a.tipoprecodirecto===id)
+        .forEach(a=>{
+            a.precodirecto=apuNum(a.precodirecto)*(1-d/100);
+        });
+
+    const base=String(pd.nome||'Preço Direto').replace(/\s+-\s+desconto\s+[+-]?\d+(?:[.,]\d+)?%$/i,'');
+    pd.nome=`${base} - desconto ${d.toLocaleString('pt-PT',{maximumFractionDigits:2})}%`;
+
+    apuSave(false);
+    apuRender();
+}
 function apuPasteDirectPrices(){const p=apuProject();if(!p.precosDirectos.length)return alert('Crie ou selecione primeiro um tipo de Preço Direto.');const typeId=p.precosDirectos[0].id;const txt=prompt('Cole os preços, um por linha:');if(txt===null)return;const vals=txt.split(/\r?\n/).map(apuNum);let i=0;p.artigos.filter(a=>!a.bold).forEach(a=>{if(i<vals.length){a.tipoprecodirecto=typeId;a.precodirecto=vals[i++]}});apuSave(false);apuRender();}
 
-function apuViewMeasurements(){const p=apuProject();const rows=p.medicoes.map((m,i)=>{const a=apuGetArticle(m.artigoId);return `<tr><td>${apuEsc(a?.art)}</td><td>${apuEsc(a?.descricao)}</td><td>${apuEsc(m.local)}</td><td class="num">${apuNum(m.np)||1}</td><td class="num">${m.comprimento??''}</td><td class="num">${m.largura??''}</td><td class="num">${m.altura??''}</td><td class="num">${apuNum(m.quantidade).toLocaleString('pt-PT',{maximumFractionDigits:4})}</td><td>${m.cad?'CAD':''}</td><td>${m.modo==='substituicao'?'Substituição':'Verificação'}</td><td><button class="apu-tool danger" onclick="apuDeleteMeasurement(${i})">X</button></td></tr>`}).join('');const tools=`<button class="apu-tool" onclick="apuNewMeasurement()">Nova linha</button><button class="apu-tool" onclick="apuSetMeasurementMode('verificacao')">Modo Verificação</button><button class="apu-tool" onclick="apuSetMeasurementMode('substituicao')">Modo Substituição</button>`;return `${apuViewHeader('Mapa de Quantidades','Medições e Quantidades',tools)}<div class="apu-view-content">${apuTable(['Art.','Descrição','Local','NP','Comprimento','Largura','Altura','Quantidade','CAD','Modo',''],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuRecalcMeasurements();apuSave(false);apuRender()">Atualizar quantidades</button>`)}`;}
-function apuNewMeasurement(){const p=apuProject();const opts=p.artigos.filter(a=>!a.bold).map(a=>`<option value="${a.id}">${apuEsc(a.art)} - ${apuEsc(a.descricao)}</option>`).join('');if(!opts)return alert('Não existem artigos.');apuDialog('Nova Medição',`<div class="apu-form-grid"><div class="apu-form-span-2"><label>Artigo</label><select id="apu-m-art">${opts}</select></div><div><label>Modo</label><select id="apu-m-mode"><option value="verificacao">Verificação</option><option value="substituicao">Substituição</option></select></div><div><label>Local</label><input id="apu-m-local"></div><div><label>NP</label><input id="apu-m-np" type="number" value="1"></div><div><label>Comprimento</label><input id="apu-m-c" type="number" step="0.0001"></div><div><label>Largura</label><input id="apu-m-l" type="number" step="0.0001"></div><div><label>Altura</label><input id="apu-m-a" type="number" step="0.0001"></div></div>`,()=>{const m={id:apuUid('med'),artigoId:document.getElementById('apu-m-art').value,modo:document.getElementById('apu-m-mode').value,local:document.getElementById('apu-m-local').value,np:apuNum(document.getElementById('apu-m-np').value)||1,comprimento:document.getElementById('apu-m-c').value,largura:document.getElementById('apu-m-l').value,altura:document.getElementById('apu-m-a').value,cad:false};m.quantidade=apuMeasurementValue(m);p.medicoes.push(m);apuRecalcMeasurements();apuDialogClose();apuSave(false);apuRender();});}
+
+function apuNewMeasurement(){
+    const p=apuProject();
+    const opts=p.artigos
+        .filter(a=>!a.bold)
+        .map(a=>`<option value="${a.id}">${apuEsc(a.art)} - ${apuEsc(a.descricao)}</option>`)
+        .join('');
+
+    if(!opts)return alert('Não existem artigos.');
+
+    apuDialog(
+        'Nova Medição',
+        `<div class="apu-form-grid">
+            <div class="apu-form-span-2">
+                <label>Artigo</label>
+                <select id="apu-m-art">${opts}</select>
+            </div>
+            <div>
+                <label>Local</label>
+                <input id="apu-m-local">
+            </div>
+            <div>
+                <label>NP</label>
+                <input id="apu-m-np" type="number" value="1">
+            </div>
+            <div>
+                <label>Comprimento</label>
+                <input id="apu-m-c" type="number" step="0.0001">
+            </div>
+            <div>
+                <label>Largura</label>
+                <input id="apu-m-l" type="number" step="0.0001">
+            </div>
+            <div>
+                <label>Altura</label>
+                <input id="apu-m-a" type="number" step="0.0001">
+            </div>
+        </div>`,
+        ()=>{
+            const m={
+                id:apuUid('med'),
+                artigoId:document.getElementById('apu-m-art').value,
+                local:document.getElementById('apu-m-local').value,
+                np:apuNum(document.getElementById('apu-m-np').value)||1,
+                comprimento:document.getElementById('apu-m-c').value,
+                largura:document.getElementById('apu-m-l').value,
+                altura:document.getElementById('apu-m-a').value,
+                cad:false
+            };
+            m.quantidade=apuMeasurementValue(m);
+            p.medicoes.push(m);
+            APU_UI.selectedMeasurementId=m.id;
+            apuRecalcMeasurements();
+            apuDialogClose();
+            apuSave(false);
+            apuRender();
+        }
+    );
+}
 function apuDeleteMeasurement(i){const p=apuProject();p.medicoes.splice(i,1);apuRecalcMeasurements();apuSave(false);apuRender();}
-function apuSetMeasurementMode(mode){const p=apuProject();p.medicoes.forEach(m=>m.modo=mode);apuRecalcMeasurements();apuSave(false);apuRender();}
+
 
 function apuViewDifferentialMargins(){const p=apuProject(),d=p.margensDiferenciais;const rows=[['Materiais','materiais'],['Mão de Obra','maoObra'],['Tarefeiros','tarefeiros'],['Subempreitadas','subempreitadas'],['Equipamentos','equipamentos'],['Preços Diretos','precosDirectos']].map(([n,k])=>`<tr><td>${n}</td><td><input style="width:90px" type="number" step="0.001" id="apu-md-${k}" value="${apuNum(d[k]||1)}"></td></tr>`).join('');return `${apuViewHeader('Margens Diferenciais','Margens diferenciadas por tipo de recurso e preços diretos')}<div class="apu-view-content">${apuTable(['Tipo','K'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuSaveDifferentialMargins()">Aplicar</button>`)}`;}
 function apuSaveDifferentialMargins(){const p=apuProject();Object.keys(p.margensDiferenciais).forEach(k=>p.margensDiferenciais[k]=apuNum(document.getElementById('apu-md-'+k)?.value)||1);apuApplyDifferentialMargins();}
-function apuViewChapterMargins(){const p=apuProject();const chapters=[...new Set(p.artigos.filter(a=>a.bold).map(a=>String(a.capitulo||a.art||'')))];const rows=chapters.map(c=>`<tr><td>${apuEsc(c)}</td><td><input style="width:90px" type="number" step="0.001" id="apu-mc-${apuEsc(c)}" value="${apuNum(p.margensCapitulos[c]||1)}"></td></tr>`).join('');return `${apuViewHeader('Margens por Capítulos','K aplicado aos artigos do capítulo correspondente')}<div class="apu-view-content">${apuTable(['Capítulo','K'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuSaveChapterMargins()">Aplicar</button>`)}`;}
-function apuSaveChapterMargins(){const p=apuProject();[...new Set(p.artigos.filter(a=>a.bold).map(a=>String(a.capitulo||a.art||'')))].forEach(c=>{const el=document.getElementById('apu-mc-'+c);if(el)p.margensCapitulos[c]=apuNum(el.value)||1});apuApplyChapterMargins();}
-function apuViewIndirects(){const p=apuProject();const f=p.indiretos.fixos||[],pc=p.indiretos.percentuais||[];return `${apuViewHeader('Custos Indiretos e Margens','Custos fixos, percentuais e lucro')}<div class="apu-view-content"><div class="apu-split"><div class="apu-panel"><div class="apu-panel-title">Custos Indiretos Fixos</div><div class="apu-panel-body">${apuTable(['Descrição','Valor'],f.map((x,i)=>`<tr><td>${apuEsc(x.descricao)}</td><td class="num">${apuMoney(x.valor)}</td></tr>`).join(''))}<button class="apu-tool" onclick="apuAddIndirect('fixos')">Inserir</button></div></div><div class="apu-panel"><div class="apu-panel-title">Custos Indiretos Percentuais</div><div class="apu-panel-body">${apuTable(['Descrição','%'],pc.map(x=>`<tr><td>${apuEsc(x.descricao)}</td><td class="num">${apuPct(x.percentagem)}</td></tr>`).join(''))}<button class="apu-tool" onclick="apuAddIndirect('percentuais')">Inserir</button></div></div></div><p><b>Lucro (K):</b> ${apuNum(p.indiretos.lucro||1).toFixed(3)} <button class="apu-tool" onclick="apuSetProfit()">Alterar</button></p></div>`;}
+
+
+
 function apuAddIndirect(kind){const p=apuProject();const desc=prompt('Descrição:');if(!desc)return;const val=apuNum(prompt(kind==='fixos'?'Valor:':'Percentagem:','0'));if(kind==='fixos')p.indiretos.fixos.push({id:apuUid('ind'),descricao:desc,valor:val});else p.indiretos.percentuais.push({id:apuUid('ind'),descricao:desc,percentagem:val});apuSave(false);apuRender();}
 function apuSetProfit(){const p=apuProject();const v=prompt('Coeficiente K de lucro:',p.indiretos.lucro||1);if(v!==null){p.indiretos.lucro=apuNum(v)||1;apuSave(false);apuRender();}}
 
-function apuViewSummary(){const p=apuProject();const chapters={};p.artigos.forEach(a=>{if(a.bold){chapters[a.id]={name:a.descricao,total:0,ord:a.ordem};return;}const key=Object.keys(chapters).reverse().find(k=>apuNum(chapters[k].ord)<apuNum(a.ordem));if(key)chapters[key].total+=apuArticleTotal(a)});const rows=Object.values(chapters).map(x=>`<tr><td>${apuEsc(x.name)}</td><td class="num">${apuMoney(x.total)}</td></tr>`).join('');return `${apuViewHeader('Resumo','Resumo do Orçamento por capítulos e subcapítulos')}<div class="apu-view-content">${apuTable(['Descrição','Total'],rows)}</div>`;}
-function apuViewABC(){const p=apuProject(),tot=apuResourceTotals();const arr=p.recursos.map(r=>({nome:r.nome,tipo:apuResourceTypeLabel(r.tipo),valor:apuNum(tot[r.id]?.total)})).filter(x=>x.valor>0).sort((a,b)=>b.valor-a.valor);const grand=arr.reduce((s,x)=>s+x.valor,0);let ac=0;const rows=arr.map(x=>{ac+=x.valor;const pct=grand?ac/grand*100:0;const cl=pct<=80?'A':pct<=95?'B':'C';return `<tr class="apu-abc-${cl.toLowerCase()}"><td>${cl}</td><td>${apuEsc(x.tipo)}</td><td>${apuEsc(x.nome)}</td><td class="num">${apuMoney(x.valor)}</td><td class="num">${apuPct(pct)}</td></tr>`}).join('');return `${apuViewHeader('Curva ABC','Zona A ≈ 80%, zona B ≈ 15%, zona C ≈ 5% do valor')}<div class="apu-view-content">${apuTable(['Zona','Tipo','Recurso','Valor','% acumulada'],rows)}</div>`;}
+
+function apuSummaryContext(e,chapterId){
+    return apuShowContext(e,[
+        ['Ir para artigo',`apuGoToSummaryChapter('${chapterId}')`],
+        ['Recursos e P. diretos do capítulo',`apuShowChapterResources('${chapterId}')`]
+    ]);
+}
+
+function apuGoToSummaryChapter(chapterId){
+    APU_UI.selectedArticleId=chapterId;
+    APU_UI.view='lpu';
+    apuRender();
+    setTimeout(()=>{
+        const rows=[...document.querySelectorAll('#apu-main-view .apu-grid tbody tr')];
+        const selected=rows.find(r=>r.classList.contains('selected'));
+        selected?.scrollIntoView({block:'center'});
+    },0);
+}
+
+function apuShowChapterResources(chapterId){
+    const p=apuProject(),chapter=apuGetArticle(chapterId);
+    if(!p||!chapter)return;
+
+    const ordered=p.artigos.slice().sort((a,b)=>apuNum(a.ordem)-apuNum(b.ordem));
+    const idx=ordered.findIndex(a=>a.id===chapterId);
+    const level=apuNum(chapter.capitulo);
+    const ids=[];
+
+    for(let i=idx+1;i<ordered.length;i++){
+        const a=ordered[i];
+        if(a.bold&&apuNum(a.capitulo)<=level)break;
+        if(!a.bold)ids.push(a.id);
+    }
+
+    const resourceTotals={};
+    ids.forEach(id=>{
+        const a=apuGetArticle(id);
+        (a?.recursos||[]).forEach(c=>{
+            const r=apuGetResource(c.recursoId);
+            if(!r)return;
+            const key='r:'+r.id;
+            resourceTotals[key]=resourceTotals[key]||{tipo:'Recurso',nome:r.nome,q:0,total:0};
+            resourceTotals[key].q+=apuNum(a.quantidade)*apuNum(c.quantidade);
+            resourceTotals[key].total+=apuNum(a.quantidade)*apuNum(c.quantidade)*apuNum(r.precounitario);
+        });
+
+        if(apuNum(a?.precodirecto)>0){
+            const pd=p.precosDirectos.find(x=>x.id===a.tipoprecodirecto);
+            const key='pd:'+(pd?.id||a.id);
+            resourceTotals[key]=resourceTotals[key]||{tipo:'Preço Direto',nome:pd?.nome||'Preço Direto',q:0,total:0};
+            resourceTotals[key].q+=apuNum(a.quantidade);
+            resourceTotals[key].total+=apuNum(a.quantidade)*apuNum(a.precodirecto);
+        }
+    });
+
+    const rows=Object.values(resourceTotals)
+        .sort((a,b)=>b.total-a.total)
+        .map(x=>`<tr><td>${apuEsc(x.tipo)}</td><td>${apuEsc(x.nome)}</td><td class="num">${x.q.toLocaleString('pt-PT',{maximumFractionDigits:4})}</td><td class="num">${apuMoney(x.total)}</td></tr>`)
+        .join('');
+
+    apuDialog(
+        'Recursos e P. diretos do capítulo',
+        apuTable(['Tipo','Descrição','Quantidade','Total'],rows),
+        null,
+        false
+    );
+}
+
+function apuViewSummary(){
+    const p=apuProject();
+    if(!p)return '';
+
+    const ordered=p.artigos.slice().sort((a,b)=>apuNum(a.ordem)-apuNum(b.ordem));
+    const chapters=[];
+
+    ordered.forEach((a,index)=>{
+        if(!a.bold)return;
+
+        const level=apuNum(a.capitulo);
+        let total=0;
+
+        for(let i=index+1;i<ordered.length;i++){
+            const x=ordered[i];
+            if(x.bold&&apuNum(x.capitulo)<=level)break;
+            if(!x.bold)total+=apuArticleTotal(x);
+        }
+
+        chapters.push({
+            id:a.id,
+            art:a.art,
+            descricao:a.descricao,
+            nivel:level,
+            total
+        });
+    });
+
+    const rows=chapters.map(x=>`<tr oncontextmenu="return apuSummaryContext(event,'${x.id}')">
+        <td>${apuEsc(x.art)}</td>
+        <td><span style="padding-left:${Math.max(0,x.nivel)*14}px">${apuEsc(x.descricao)}</span></td>
+        <td class="num">${apuMoney(x.total)}</td>
+    </tr>`).join('');
+
+    return `${apuViewHeader('Resumo','Resumo do Orçamento por capítulos e subcapítulos')}
+        <div class="apu-view-content">
+            ${apuTable(['Art.','Descrição','Total'],rows)}
+        </div>`;
+}
+function apuViewABC(){
+    const p=apuProject();
+    const totals=apuResourceTotals();
+
+    const recursos=p.recursos.map(r=>({
+        id:r.id,
+        classe:'Recurso',
+        tipo:apuResourceTypeLabel(r.tipo),
+        nome:r.nome,
+        valor:apuNum(totals[r.id]?.total)
+    }));
+
+    const diretos=p.precosDirectos.map(pd=>({
+        id:pd.id,
+        classe:'Preço Direto',
+        tipo:'Preço Direto',
+        nome:pd.nome,
+        valor:p.artigos
+            .filter(a=>a.tipoprecodirecto===pd.id)
+            .reduce((s,a)=>s+apuNum(a.quantidade)*apuNum(a.precodirecto),0)
+    }));
+
+    const arr=[...recursos,...diretos]
+        .filter(x=>x.valor>0)
+        .sort((a,b)=>b.valor-a.valor);
+
+    const grand=arr.reduce((s,x)=>s+x.valor,0);
+    let ac=0;
+
+    const rows=arr.map(x=>{
+        ac+=x.valor;
+        const pct=grand?ac/grand*100:0;
+        const cl=pct<=80?'A':pct<=95?'B':'C';
+        return `<tr class="apu-abc-${cl.toLowerCase()}">
+            <td>${cl}</td>
+            <td>${apuEsc(x.tipo)}</td>
+            <td>${apuEsc(x.nome)}</td>
+            <td class="num">${apuMoney(x.valor)}</td>
+            <td class="num">${apuPct(pct)}</td>
+        </tr>`;
+    }).join('');
+
+    return `${apuViewHeader(
+        'Curva ABC',
+        'Recursos e Preços Diretos — zona A ≈ 80%, zona B ≈ 15%, zona C ≈ 5%'
+    )}
+    <div class="apu-view-content">
+        ${apuTable(['Zona','Tipo','Recurso / Preço Direto','Valor','% acumulada'],rows)}
+    </div>`;
+}
 function apuViewProperties(){const p=apuProject(),x=p.propriedades;return `${apuViewHeader('Propriedades do Orçamento')}<div class="apu-view-content"><div class="apu-form-grid"><div><label>Referência</label><input id="apu-prop-ref" value="${apuEsc(p.ref)}"></div><div class="apu-form-span-2"><label>Nome</label><input id="apu-prop-nome" value="${apuEsc(p.nome)}"></div><div><label>Moeda</label><input id="apu-prop-moeda" value="${apuEsc(p.moeda)}"></div><div><label>Cliente</label><input id="apu-prop-cli" value="${apuEsc(x.cliente)}"></div><div><label>Obra</label><input id="apu-prop-obra" value="${apuEsc(x.obra)}"></div><div><label>Local</label><input id="apu-prop-local" value="${apuEsc(x.local)}"></div><div><label>Data</label><input id="apu-prop-data" type="date" value="${apuEsc(x.data)}"></div><div><label>Arredonda Artigos</label><select id="apu-prop-round"><option value="0" ${!p.arredondaArtigos?'selected':''}>Não</option><option value="1" ${p.arredondaArtigos?'selected':''}>Sim</option></select></div><div><label>Protegido</label><select id="apu-prop-prot"><option value="0" ${!p.protegido?'selected':''}>Não</option><option value="1" ${p.protegido?'selected':''}>Sim</option></select></div><div class="apu-form-span-4"><label>Observações</label><textarea id="apu-prop-obs">${apuEsc(x.observacoes)}</textarea></div></div><p><button class="apu-tool" onclick="apuSaveProperties()">Guardar</button></p></div>`;}
 function apuSaveProperties(){const p=apuProject(),x=p.propriedades;p.ref=document.getElementById('apu-prop-ref').value;p.nome=document.getElementById('apu-prop-nome').value;p.moeda=document.getElementById('apu-prop-moeda').value;x.cliente=document.getElementById('apu-prop-cli').value;x.obra=document.getElementById('apu-prop-obra').value;x.local=document.getElementById('apu-prop-local').value;x.data=document.getElementById('apu-prop-data').value;x.observacoes=document.getElementById('apu-prop-obs').value;p.arredondaArtigos=document.getElementById('apu-prop-round').value==='1';p.protegido=document.getElementById('apu-prop-prot').value==='1';apuSave(false);apuInit();}
-function apuViewGroups(){const p=apuProject();return `${apuViewHeader('Lista de Grupos')}<div class="apu-view-content">${apuTable(['Grupo'],p.grupos.map(g=>`<tr><td>${apuEsc(g.nome)}</td></tr>`).join(''))}<p><button class="apu-tool" onclick="apuNewGroup()">Inserir Grupo</button></p></div>`;}
-function apuNewGroup(){const p=apuProject();const n=prompt('Nome do grupo:');if(n){p.grupos.push({id:apuUid('grp'),nome:n});apuSave(false);apuRender();}}
 
-function apuViewMaps(){const p=apuProject();const rows=p.mapasComparativos.map(m=>`<tr class="${APU_UI.selectedMapId===m.id?'selected':''}" onclick="APU_UI.selectedMapId='${m.id}';apuRender()" ondblclick="apuOpenMap('${m.id}')"><td>${apuEsc(m.grupo||'')}</td><td>${apuEsc(m.nome)}</td><td>${m.concluido?'Sim':'Não'}</td><td>${(m.propostas||[]).length}</td><td>${(m.artigos||[]).length}</td></tr>`).join('');return `${apuViewHeader('Mapas Comparativos','Comparação de propostas de fornecedores')}<div class="apu-view-content">${apuTable(['Grupo','Mapa Comparativo','Concluído','Propostas','Artigos'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuNewMap()">Novo</button><button class="apu-tool danger" onclick="apuDeleteMap()">Eliminar</button><button class="apu-tool" onclick="apuOpenSelectedMap()">Abrir</button>`)}`;}
+function apuNewGroup(){
+    const p=apuProject();
+    const raw=prompt('Nome do grupo:');
+    if(raw===null)return;
+    const n=raw.trim();
+    if(!n)return;
+    if(p.grupos.some(g=>String(g.nome||'').trim().toLowerCase()===n.toLowerCase())){
+        return alert('Já existe um grupo com este nome.');
+    }
+    const g={id:apuUid('grp'),nome:n,sistema:false};
+    p.grupos.push(g);
+    APU_UI.selectedGroupId=g.id;
+    apuSave(false);
+    apuRender();
+}
+
+
 function apuNewMap(){const p=apuProject();const n=prompt('Nome do Mapa Comparativo:');if(!n)return;const m={id:apuUid('mc'),grupo:'',nome:n,concluido:false,artigos:[],linhas:[],propostas:[]};p.mapasComparativos.push(m);APU_UI.selectedMapId=m.id;apuSave(false);apuRender();}
 function apuDeleteMap(){const p=apuProject(),id=APU_UI.selectedMapId;if(!id)return;if(!confirm('Eliminar Mapa Comparativo?'))return;p.mapasComparativos=p.mapasComparativos.filter(x=>x.id!==id);APU_UI.selectedMapId=null;apuSave(false);apuRender();}
 function apuOpenSelectedMap(){if(APU_UI.selectedMapId)apuOpenMap(APU_UI.selectedMapId);}
-function apuOpenMap(id){APU_UI.selectedMapId=id;document.getElementById('apu-main-view').innerHTML=apuViewMapDetail();}
-function apuViewMapDetail(){const p=apuProject(),m=p.mapasComparativos.find(x=>x.id===APU_UI.selectedMapId);if(!m)return'';const props=m.propostas||[];const headers=['Art.','Descrição','Un.','Quant.','V. Orçamentado',...props.map(x=>apuEsc(x.nome))];const rows=(m.artigos||[]).map(x=>{const a=apuGetArticle(x.artigoId);return `<tr><td>${apuEsc(a?.art)}</td><td>${apuEsc(a?.descricao)}</td><td>${apuEsc(a?.unidade)}</td><td class="num">${apuNum(x.quantidade||a?.quantidade)}</td><td class="num">${apuMoney(apuArticleUnitPrice(a))}</td>${props.map(pr=>`<td><input type="number" step="0.0001" value="${apuNum((x.precos||{})[pr.id])}" onchange="apuMapSetPrice('${m.id}','${x.artigoId}','${pr.id}',this.value)"></td>`).join('')}</tr>`}).join('');return `${apuViewHeader('Mapa Comparativo',apuEsc(m.nome))}<div class="apu-toolbar-main"><button class="apu-tool" onclick="apuMapAssociateArticles()">Associar Artigos</button><button class="apu-tool" onclick="apuMapAddLine()">Inserir Linhas Adicionais</button><button class="apu-tool" onclick="apuMapProposals()">Propostas</button><button class="apu-tool" onclick="apuMapExportToLpu()">Exportar preços para a LPU</button><button class="apu-tool" onclick="apuExportMapExcel()">Exportar para Excel</button></div><div class="apu-view-content">${apuTable(headers,rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuSetView('mapas')">Sair</button>`)}`;}
+
+
 function apuMapAssociateArticles(){const p=apuProject(),m=p.mapasComparativos.find(x=>x.id===APU_UI.selectedMapId);const available=p.artigos.filter(a=>!a.bold&&!m.artigos.some(x=>x.artigoId===a.id));apuPicker('Selecione Artigos da Lista de Preços',available.map(a=>({id:a.id,label:`${a.art} - ${a.descricao}`})),id=>{const a=apuGetArticle(id);m.artigos.push({artigoId:id,quantidade:a.quantidade,precos:{}});apuSave(false);apuOpenMap(m.id);});}
-function apuMapAddLine(){alert('As Linhas Adicionais são suportadas no modelo do mapa; introduza-as na próxima edição detalhada do mapa.');}
-function apuMapProposals(){const p=apuProject(),m=p.mapasComparativos.find(x=>x.id===APU_UI.selectedMapId);const n=prompt('Nova Proposta / Empresa:');if(!n)return;m.propostas.push({id:apuUid('prop'),nome:n,ativa:true,adjudicada:false});apuSave(false);apuOpenMap(m.id);}
+
+
 function apuMapSetPrice(mapId,artigoId,propostaId,value){const p=apuProject(),m=p.mapasComparativos.find(x=>x.id===mapId);const row=m?.artigos.find(x=>x.artigoId===artigoId);if(!row)return;if(!row.precos)row.precos={};row.precos[propostaId]=apuNum(value);apuSave(false);}
 function apuMapExportToLpu(){const p=apuProject(),m=p.mapasComparativos.find(x=>x.id===APU_UI.selectedMapId);const pr=m.propostas.find(x=>x.adjudicada)||m.propostas[0];if(!pr)return alert('Não existem propostas.');let pd=p.precosDirectos.find(x=>x.nome===m.nome);if(!pd){pd={id:apuUid('pd'),nome:m.nome};p.precosDirectos.push(pd)}m.artigos.forEach(x=>{const a=apuGetArticle(x.artigoId);const v=apuNum((x.precos||{})[pr.id]);if(a&&v){a.tipoprecodirecto=pd.id;a.precodirecto=v}});apuSave(false);alert('Preços exportados para a Lista de Preços Unitários.');}
-function apuExportMapExcel(){alert('Utilize a exportação global Excel da aplicação para dados estruturados; a exportação específica do mapa será ligada ao XLSX existente.');}
 
-function apuViewPurchases(){const p=apuProject();const rows=p.compras.map(c=>`<tr class="${APU_UI.selectedPurchaseId===c.id?'selected':''}" onclick="APU_UI.selectedPurchaseId='${c.id}';apuRender()"><td>${apuEsc(c.tipo||'Compra')}</td><td>${apuEsc(c.descricao)}</td><td>${apuEsc(c.fornecedor)}</td><td class="num">${apuMoney(c.valorOrcamentado)}</td><td class="num">${apuMoney(c.valorAdjudicacao)}</td><td>${apuEsc(c.estado||'')}</td><td>${apuEsc(c.pasta||'')}</td></tr>`).join('');return `${apuViewHeader('Compras e Subempreitadas')}<div class="apu-view-content">${apuTable(['Tipo','Descrição','Fornecedor Adj.','Valor Orçamentado','Valor da Adjudicação','Estado','Pasta'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuNewPurchase()">Nova Compra</button><button class="apu-tool danger" onclick="apuDeletePurchase()">Eliminar</button><button class="apu-tool" onclick="apuSetView('mapas')">Mapa Comp.</button>`)}`;}
-function apuNewPurchase(){const p=apuProject();apuDialog('Nova Compra',`<div class="apu-form-grid"><div><label>Tipo</label><select id="apu-c-tipo"><option>Compra</option><option>Subempreitada</option></select></div><div class="apu-form-span-2"><label>Descrição</label><input id="apu-c-desc"></div><div><label>Fornecedor Adj.</label><input id="apu-c-forn"></div><div><label>Valor Orçamentado</label><input id="apu-c-orc" type="number"></div><div><label>Valor da Adjudicação</label><input id="apu-c-adj" type="number"></div><div><label>Estado</label><input id="apu-c-est"></div><div><label>Pasta</label><input id="apu-c-pasta"></div></div>`,()=>{const c={id:apuUid('compra'),tipo:document.getElementById('apu-c-tipo').value,descricao:document.getElementById('apu-c-desc').value,fornecedor:document.getElementById('apu-c-forn').value,valorOrcamentado:apuNum(document.getElementById('apu-c-orc').value),valorAdjudicacao:apuNum(document.getElementById('apu-c-adj').value),estado:document.getElementById('apu-c-est').value,pasta:document.getElementById('apu-c-pasta').value};p.compras.push(c);apuDialogClose();apuSave(false);apuRender();});}
+
+
+
 function apuDeletePurchase(){const p=apuProject(),id=APU_UI.selectedPurchaseId;if(!id)return;if(!confirm('Eliminar compra/subempreitada?'))return;p.compras=p.compras.filter(x=>x.id!==id);APU_UI.selectedPurchaseId=null;apuSave(false);apuRender();}
 function apuViewPurchaseControl(){const p=apuProject();const totalO=p.compras.reduce((s,x)=>s+apuNum(x.valorOrcamentado),0),totalA=p.compras.reduce((s,x)=>s+apuNum(x.valorAdjudicacao),0);return `${apuViewHeader('Controle de Compras')}<div class="apu-view-content"><div class="apu-summary-strip"><div class="apu-summary-box">Total Orçamentado<b>${apuMoney(totalO)}</b></div><div class="apu-summary-box">Total Adjudicações<b>${apuMoney(totalA)}</b></div><div class="apu-summary-box">Saldo<b>${apuMoney(totalO-totalA)}</b></div></div>${apuViewPurchases().match(/<div class="apu-grid-wrap">[\s\S]*?<\/div>/)?.[0]||''}</div>`;}
 
-function apuViewAutos(){const p=apuProject();let acum=0;const rows=p.autos.sort((a,b)=>apuNum(a.numero)-apuNum(b.numero)).map(a=>{acum+=apuNum(a.valor);return `<tr class="${APU_UI.selectedAutoId===a.id?'selected':''}" onclick="APU_UI.selectedAutoId='${a.id}';apuRender()"><td>${apuEsc(a.numero)}</td><td>${apuEsc(a.data)}</td><td class="num">${apuMoney(a.valor)}</td><td class="num">${apuMoney(acum)}</td><td class="num">${apuMoney(a.garantias)}</td><td class="num">${apuMoney(a.adiantamentos)}</td><td class="num">${apuMoney(a.revisaodeprecos)}</td></tr>`}).join('');return `${apuViewHeader('Autos de Medição')}<div class="apu-view-content">${apuTable(['N.º','Data','Total do Auto','Acumulado','Garantias','Adiantamentos','Revisão de preços'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuNewAuto()">Criar Auto</button><button class="apu-tool danger" onclick="apuDeleteAuto()">Eliminar</button><button class="apu-tool" onclick="apuPrintAuto()">Imprimir Auto</button><button class="apu-tool" onclick="apuPrintAutoSummary()">Imprimir Resumo do Auto</button>`)}`;}
-function apuNewAuto(){const p=apuProject();apuDialog('Criar Auto',`<div class="apu-form-grid"><div><label>Número</label><input id="apu-auto-num" type="number" value="${p.autos.length+1}"></div><div><label>Data</label><input id="apu-auto-data" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Valor</label><input id="apu-auto-val" type="number" step="0.01"></div><div><label>Garantias</label><input id="apu-auto-gar" type="number" step="0.01"></div><div><label>Adiantamentos</label><input id="apu-auto-adi" type="number" step="0.01"></div><div><label>Revisão de preços</label><input id="apu-auto-rev" type="number" step="0.01"></div></div>`,()=>{p.autos.push({id:apuUid('auto'),numero:apuNum(document.getElementById('apu-auto-num').value),data:document.getElementById('apu-auto-data').value,valor:apuNum(document.getElementById('apu-auto-val').value),garantias:apuNum(document.getElementById('apu-auto-gar').value),adiantamentos:apuNum(document.getElementById('apu-auto-adi').value),revisaodeprecos:apuNum(document.getElementById('apu-auto-rev').value)});apuDialogClose();apuSave(false);apuRender();});}
+
+
 function apuDeleteAuto(){const p=apuProject(),id=APU_UI.selectedAutoId;if(!id)return;p.autos=p.autos.filter(x=>x.id!==id);APU_UI.selectedAutoId=null;apuSave(false);apuRender();}
 function apuPrintAuto(){window.print();}
 function apuPrintAutoSummary(){window.print();}
 
-function apuViewAdditionalWorks(){const p=apuProject();const rows=p.trabalhosAMais.map(x=>`<tr><td>${apuEsc(x.ref)}</td><td>${apuEsc(x.descricao)}</td><td class="num">${apuMoney(x.valor)}</td><td>${x.arquivado?'Arquivado':'Ativo'}</td></tr>`).join('');return `${apuViewHeader('Trabalhos a Mais')}<div class="apu-view-content">${apuTable(['Ref.','Descrição','Valor','Estado'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuNewAdditionalWork()">Novo</button>`)}`;}
+
 function apuNewAdditionalWork(){const p=apuProject();const d=prompt('Descrição:');if(!d)return;const v=apuNum(prompt('Valor:','0'));p.trabalhosAMais.push({id:apuUid('tm'),ref:String(p.trabalhosAMais.length+1),descricao:d,valor:v,arquivado:false});apuSave(false);apuRender();}
 
-function apuViewCosts(){const p=apuProject();const totalBudget=p.artigos.filter(a=>!a.bold).reduce((s,a)=>s+apuArticleTotal(a),0);const real=p.custos.reduce((s,x)=>s+apuNum(x.valor),0);const rows=p.custos.map(c=>`<tr class="${APU_UI.selectedCostId===c.id?'selected':''}" onclick="APU_UI.selectedCostId='${c.id}';apuRender()"><td>${apuEsc(c.data)}</td><td>${apuEsc(c.tipo)}</td><td>${apuEsc(c.descricao)}</td><td class="num">${apuMoney(c.valor)}</td></tr>`).join('');return `${apuViewHeader('Controle de Custos')}<div class="apu-view-content"><div class="apu-summary-strip"><div class="apu-summary-box">Total Orçamentado<b>${apuMoney(totalBudget)}</b></div><div class="apu-summary-box">Total Real<b>${apuMoney(real)}</b></div><div class="apu-summary-box">Saldo<b>${apuMoney(totalBudget-real)}</b></div></div>${apuTable(['Data','Tipo','Descrição','Valor'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuNewCost()">Inserir</button><button class="apu-tool danger" onclick="apuDeleteCost()">Eliminar</button>`)}`;}
-function apuNewCost(){const p=apuProject();apuDialog('Novo Custo',`<div class="apu-form-grid"><div><label>Data</label><input id="apu-cost-data" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Tipo</label><select id="apu-cost-tipo"><option>Compra</option><option>Mão de Obra</option><option>Equipamento</option><option>Subempreitada</option><option>Outro</option></select></div><div class="apu-form-span-2"><label>Descrição</label><input id="apu-cost-desc"></div><div><label>Valor</label><input id="apu-cost-val" type="number" step="0.01"></div></div>`,()=>{p.custos.push({id:apuUid('cost'),data:document.getElementById('apu-cost-data').value,tipo:document.getElementById('apu-cost-tipo').value,descricao:document.getElementById('apu-cost-desc').value,valor:apuNum(document.getElementById('apu-cost-val').value)});apuDialogClose();apuSave(false);apuRender();});}
+
+
 function apuDeleteCost(){const p=apuProject(),id=APU_UI.selectedCostId;if(!id)return;p.custos=p.custos.filter(x=>x.id!==id);APU_UI.selectedCostId=null;apuSave(false);apuRender();}
 function apuViewRebudget(){return `${apuViewHeader('Reorçamentação','Represupuestar / Re-budgeting')}<div class="apu-view-content"><div class="apu-empty">A área de reorçamentação mantém dados separados do orçamento contratual e permite reiniciar os dados do reorçamento.</div></div>${apuBottom(`<button class="apu-tool danger" onclick="apuResetRebudget()">Reiniciar dados do reorçamento</button>`)}`;}
 function apuResetRebudget(){const p=apuProject();if(confirm('Reiniciar dados do reorçamento?')){p.reorcamento=[];apuSave(false);apuRender();}}
 
-function apuViewBilling(){const p=apuProject();const rows=p.faturas.map(f=>`<tr><td>${apuEsc(f.data)}</td><td>${apuEsc(f.referencia)}</td><td>${apuEsc(f.descricao)}</td><td>${f.cliente?'Cliente':'Fornecedor'}</td><td class="num">${apuMoney(f.valor)}</td></tr>`).join('');return `${apuViewHeader('Faturação')}<div class="apu-view-content">${apuTable(['Data','Referência','Descrição','Tipo','Valor'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuNewInvoice(true)">Fatura Cliente</button><button class="apu-tool" onclick="apuNewInvoice(false)">Fatura Fornecedor</button>`)}`;}
-function apuNewInvoice(cliente){const p=apuProject();apuDialog(cliente?'Fatura de Cliente':'Fatura de Fornecedor',`<div class="apu-form-grid"><div><label>Data</label><input id="apu-f-data" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label>Referência</label><input id="apu-f-ref"></div><div class="apu-form-span-2"><label>Descrição</label><input id="apu-f-desc"></div><div><label>Valor</label><input id="apu-f-val" type="number"></div></div>`,()=>{p.faturas.push({id:apuUid('fat'),data:document.getElementById('apu-f-data').value,referencia:document.getElementById('apu-f-ref').value,descricao:document.getElementById('apu-f-desc').value,valor:apuNum(document.getElementById('apu-f-val').value),cliente});apuDialogClose();apuSave(false);apuRender();});}
 
-function apuViewPlanning(){const p=apuProject();const rows=p.planeamentos.map(t=>`<tr class="${APU_UI.selectedPlanningId===t.id?'selected':''}" onclick="APU_UI.selectedPlanningId='${t.id}';apuRender()"><td>${apuEsc(t.ref)}</td><td>${apuEsc(t.nome)}</td><td>${apuEsc(t.datainicio)}</td><td class="num">${apuNum(t.duracao)}</td><td>${apuEsc(apuTaskEnd(t))}</td><td class="num">${apuPct(t.percentagem)}</td></tr>`).join('');const gantt=p.planeamentos.map((t,i)=>`<div class="apu-gantt-row"><div class="apu-gantt-name">${apuEsc(t.ref)} ${apuEsc(t.nome)}</div><div class="apu-gantt-track"><div class="apu-gantt-bar" style="left:${Math.min(80,i*4)}%;width:${Math.max(3,Math.min(25,apuNum(t.duracao)))}%">${apuNum(t.duracao)}d</div></div></div>`).join('');return `${apuViewHeader('Planeamento Geral','Master Planning')}<div class="apu-view-content"><div class="apu-tabs"><button class="apu-tab active">Tabela</button><button class="apu-tab">Gantt</button></div>${apuTable(['Ref.','Nome','Data Início','Duração','Fim','Percentagem Concluída'],rows)}<div class="apu-panel" style="margin-top:8px"><div class="apu-panel-title">Gantt</div><div class="apu-panel-body apu-gantt">${gantt||'<div class="apu-empty">Sem tarefas</div>'}</div></div></div>${apuBottom(`<button class="apu-tool" onclick="apuNewPlanningTask()">Novo</button><button class="apu-tool danger" onclick="apuDeletePlanningTask()">Eliminar</button><button class="apu-tool" onclick="window.print()">Imprimir Planeamento</button>`)}`;}
+
+
+
 function apuTaskEnd(t){if(!t.datainicio)return'';const d=new Date(t.datainicio+'T00:00:00');d.setDate(d.getDate()+Math.max(0,apuNum(t.duracao)-1));return d.toISOString().slice(0,10);}
-function apuNewPlanningTask(){const p=apuProject();apuDialog('Nova Tarefa',`<div class="apu-form-grid"><div><label>Ref.</label><input id="apu-pl-ref"></div><div class="apu-form-span-2"><label>Nome</label><input id="apu-pl-nome"></div><div><label>Data Início</label><input id="apu-pl-data" type="date"></div><div><label>Duração (dias)</label><input id="apu-pl-dur" type="number" value="1"></div><div><label>% Concluída</label><input id="apu-pl-pct" type="number" value="0"></div></div>`,()=>{p.planeamentos.push({id:apuUid('plan'),ref:document.getElementById('apu-pl-ref').value,nome:document.getElementById('apu-pl-nome').value,datainicio:document.getElementById('apu-pl-data').value,duracao:apuNum(document.getElementById('apu-pl-dur').value),percentagem:apuNum(document.getElementById('apu-pl-pct').value)});apuDialogClose();apuSave(false);apuRender();});}
+
 function apuDeletePlanningTask(){const p=apuProject(),id=APU_UI.selectedPlanningId;if(!id)return;p.planeamentos=p.planeamentos.filter(x=>x.id!==id);APU_UI.selectedPlanningId=null;apuSave(false);apuRender();}
 function apuViewWorkPlan(){return apuGenericPlanView('Plano de Trabalhos','planoTrabalhos',['Tarefa','Data Início','Duração','Percentagem Concluída']);}
 function apuViewResourcePlan(){return apuGenericPlanView('Plano de MO e EQ','planoRecursos',['Tarefa','Recurso','Un.','Quantidade']);}
-function apuViewPaymentPlan(){const p=apuProject();let ap=0,ar=0;const rows=p.planoPagamentos.map(x=>{ap+=apuNum(x.previsto);ar+=apuNum(x.realizado);return `<tr><td>${apuEsc(x.periodo)}</td><td class="num">${apuMoney(x.previsto)}</td><td class="num">${apuMoney(x.realizado)}</td><td class="num">${apuMoney(ap)}</td><td class="num">${apuMoney(ar)}</td></tr>`}).join('');return `${apuViewHeader('Plano de Pagamentos')}<div class="apu-view-content">${apuTable(['Período','Previsto','Realizado','Previsto Acum.','Realizado Acum.'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuAddPaymentPeriod()">Inserir</button>`)}`;}
-function apuAddPaymentPeriod(){const p=apuProject();const periodo=prompt('Período (AAAA/MM):');if(!periodo)return;p.planoPagamentos.push({id:apuUid('pag'),periodo,previsto:apuNum(prompt('Valor previsto:','0')),realizado:0});apuSave(false);apuRender();}
+
+
 function apuViewPurchasePlan(){return apuGenericPlanView('Plano de Compras','planoCompras',['Descrição','Prazo Consulta','Prazo Compra','Estado']);}
 function apuViewWeeklyPlanning(){return apuGenericPlanView('Planeamento Semanal','planeamentoSemanal',['Semana','Tarefa | Pacote de Trabalho','Objetivo','Equipa','Estado']);}
-function apuGenericPlanView(title,key,headers){const p=apuProject();const rows=(p[key]||[]).map(x=>`<tr>${headers.map(h=>`<td>${apuEsc(x[h]??'')}</td>`).join('')}</tr>`).join('');return `${apuViewHeader(title)}<div class="apu-view-content">${apuTable(headers,rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuAddGenericPlanRow('${key}')">Inserir</button>`)}`;}
-function apuAddGenericPlanRow(key){const p=apuProject();const desc=prompt('Descrição / Tarefa:');if(!desc)return;p[key].push({id:apuUid('row'),Descrição:desc,Tarefa:desc});apuSave(false);apuRender();}
+
+
 function apuViewMemory(){const p=apuProject();return `${apuViewHeader('Memória Descritiva')}<div class="apu-view-content"><textarea id="apu-memory" style="width:100%;min-height:500px;box-sizing:border-box">${apuEsc(p.propriedades.memoriadescritiva||'')}</textarea><p><button class="apu-tool" onclick="apuSaveMemory()">Guardar</button></p></div>`;}
 function apuSaveMemory(){const p=apuProject();p.propriedades.memoriadescritiva=document.getElementById('apu-memory').value;apuSave(false);}
 
 function apuNewProject(){const nome=prompt('Nome do novo orçamento:','Novo Orçamento');if(!nome)return;const p=apuDefaultProject(nome);DB.apu.push(p);APU_UI.projectId=p.id;APU_UI.view='lpu';APU_UI.lpuView='normal';apuSave(false);apuInit();}
-function apuOpenProject(){if(!DB.apu.length)return alert('Não existem orçamentos A.P.U-ROFREICRC guardados.');const txt=DB.apu.map((p,i)=>`${i+1} - ${p.ref?p.ref+' - ':''}${p.nome}`).join('\n');const n=apuNum(prompt('Selecione o orçamento:\n'+txt,'1'))-1;if(!DB.apu[n])return;APU_UI.projectId=DB.apu[n].id;apuInit();}
+
 async function apuSave(showMessage=true){const p=apuProject();if(!p)return;p.editadoEm=new Date().toISOString();p.u_edit=user?.u||'';try{await db.ref(`apu/${p.id}`).set(p);if(showMessage)alert('Orçamento guardado.');apuUpdateStatus('Guardado');}catch(e){console.error(e);alert('Não foi possível guardar o orçamento A.P.U-ROFREICRC.');}}
 function apuExportProject(){const p=apuProject();if(!p)return;const blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});saveAs(blob,`${p.ref||p.nome||'orcamento'}.apu.json`);}
-function apuImportProject(){const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=()=>{const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const p=JSON.parse(r.result);p.id=apuUid('apu');DB.apu.push(p);APU_UI.projectId=p.id;apuSave(false);apuInit();}catch(e){alert('Ficheiro inválido.')}};r.readAsText(f)};inp.click();}
+
 function apuUpdateStatus(msg='Pronto'){const p=apuProject();const m=document.getElementById('apu-status-msg');const t=document.getElementById('apu-status-total');if(m)m.textContent=msg;if(t)t.textContent=p?`Total do Orçamento: ${apuMoney(p.artigos.filter(a=>!a.bold).reduce((s,a)=>s+apuArticleTotal(a),0))}`:'';}
 function apuShowShortcuts(){alert('F2: editar texto do artigo / atividade\nDuplo clique: composição de preços\nCtrl+C / Ctrl+V: copiar e colar\nBotão direito: menu de contexto');}
 function apuAbout(){alert('A.P.U-ROFREICRC — módulo de orçamentação, gestão de obra e planeamento integrado na aplicação ROFREICRC.');}
@@ -6254,9 +6993,130 @@ function apuDialogClose(){document.getElementById('apu-dialog-backdrop')?.remove
 
 function apuShowContext(e,items){e.preventDefault();const c=document.getElementById('apu-context');if(!c)return false;c.innerHTML=items.map(x=>x[0]==='sep'?'<div class="sep"></div>':`<button onclick="${x[1]};apuHideContext()">${x[0]}</button>`).join('');c.style.display='block';c.style.left=Math.min(e.clientX,window.innerWidth-290)+'px';c.style.top=Math.min(e.clientY,window.innerHeight-360)+'px';setTimeout(()=>document.addEventListener('click',apuHideContext,{once:true}),0);return false;}
 function apuHideContext(){const c=document.getElementById('apu-context');if(c)c.style.display='none';}
-function apuArticleContext(e,id){APU_UI.selectedArticleId=id;return apuShowContext(e,[['Editar preço composto do artigo',`apuOpenArticleComposition('${id}')`],['Editar texto do artigo','apuEditArticle()'],['Inserir novo artigo','apuInsertArticle()'],['Eliminar artigo','apuDeleteArticle()'],['sep',''],['Inserir atividade',`apuOpenArticleComposition('${id}');apuInsertActivityToArticle(false,false)`],['Inserir recurso',`apuOpenArticleComposition('${id}');apuInsertResourceToArticle(false,false)`],['Inserir Mat+M.O.',`apuInsertMatMO('${id}')`],['Inserir Sub.',`apuInsertSub('${id}')`],['sep',''],['Aumenta nível de capítulo',`apuChangeChapterLevel('${id}',1)`],['Diminui nível de capítulo',`apuChangeChapterLevel('${id}',-1)`],['Copiar e Colar','apuCopyArticleComposition()'],['Importar preço de orçamento externo','apuImportExternalArticle()'],['Criar artigos da Base de Dados','apuSetView(\'lpu\')'],['Criar artigos a partir de atividades','apuCreateArticleFromActivity()'],['Criar artigos a partir de subempreitadas','apuCreateArticleFromSubcontract()'],['Exportar artigo para Base de Dados','apuExportArticleToDatabase()'],['Reordenar artigos','apuReorderArticles()'],['Recursos do artigo',`apuShowArticleResources('${id}')`]]);}
-function apuResourceContext(e,id){APU_UI.selectedResourceId=id;return apuShowContext(e,[['Editar texto',`apuEditResource('${id}')`],['Ver utilização',`apuShowResourceUsage('${id}')`],['Criar cópia',`apuDuplicateResource('${id}')`],['Inserir recurso','apuEditResource()'],['Eliminar recurso','apuDeleteResource()']]);}
-function apuActivityContext(e,id){APU_UI.selectedActivityId=id;return apuShowContext(e,[['Editar preço composto',`apuOpenActivityComposition('${id}')`],['Editar texto',`apuActivityDialog('${id}')`],['Ver utilização',`apuShowActivityUsage('${id}')`],['Criar cópia',`apuDuplicateActivity('${id}')`],['Inserir atividade','apuNewActivity()'],['Eliminar','apuDeleteActivity()']]);}
+function apuArticleContext(e,id){
+    APU_UI.selectedArticleId=id;
+    return apuShowContext(e,[
+        ['Editar preço composto do artigo',`apuOpenArticleComposition('${id}')`],
+        ['Editar texto do artigo','apuEditArticle()'],
+        ['Inserir novo artigo','apuInsertArticle()'],
+        ['Eliminar artigo','apuDeleteArticle()'],
+        ['sep',''],
+        ['Inserir atividade',`apuOpenArticleComposition('${id}');apuInsertActivityToArticle(false,false)`],
+        ['Inserir recurso',`apuOpenArticleComposition('${id}');apuInsertResourceToArticle(false,false)`],
+        ['Inserir Mat+M.O.',`apuOpenArticleComposition('${id}');apuQuickMatMO()`],
+        ['Inserir Sub.',`apuOpenArticleComposition('${id}');apuQuickSub()`],
+        ['sep',''],
+        ['Aumenta nível de capítulo',`apuChangeChapterLevel('${id}',1)`],
+        ['Diminui nível de capítulo',`apuChangeChapterLevel('${id}',-1)`],
+        ['Copiar e Colar','apuCopyArticleComposition()'],
+        ['Importar preço de orçamento externo','apuImportExternalArticle()'],
+        ['Criar novos artigos a partir de artigos da Base de Dados','apuImportArticlesFromDatabase()'],
+        ['Criar novos artigos a partir de atividades da Base de Dados','apuImportActivitiesFromDatabaseAsArticles()'],
+        ['Criar novos artigos a partir de subempreitadas da Base de Dados','apuImportSubcontractsFromDatabaseAsArticles()'],
+        ['Exportar artigo para Base de Dados','apuExportArticleToDatabase()'],
+        ['Reordenar artigos','apuReorderArticles()'],
+        ['Recursos do artigo',`apuShowArticleResources('${id}')`]
+    ]);
+}
+
+function apuChangeResourceType(id){
+    const r=apuGetResource(id);
+    if(!r)return;
+    const raw=prompt(
+        'Tipo do recurso:\n1 - Materiais\n2 - Mão de Obra\n3 - Tarefeiros\n4 - Subempreitadas\n5 - Equipamentos',
+        String(apuNum(r.tipo)||1)
+    );
+    if(raw===null)return;
+    const tipo=Math.trunc(apuNum(raw));
+    if(tipo<1||tipo>5)return alert('Tipo inválido.');
+    r.tipo=tipo;
+    apuSave(false);
+    apuRender();
+}
+
+async function apuExportResourceToDatabase(id){
+    const r=apuGetResource(id);
+    if(!r)return;
+
+    try{
+        const res=await fetch('/api/apu/bdd/recursos/upsert',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(r)
+        });
+        if(!res.ok)throw new Error('HTTP '+res.status);
+        alert('Recurso copiado/atualizado na Base de Dados Técnica.');
+    }catch(e){
+        console.error(e);
+        alert('Esta operação requer o serviço do servidor ligado à Base de Dados Técnica .bdd.');
+    }
+}
+
+async function apuExportActivityToDatabase(id){
+    const a=apuGetActivity(id);
+    if(!a)return;
+
+    try{
+        const res=await fetch('/api/apu/bdd/actividades/upsert',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(a)
+        });
+        if(!res.ok)throw new Error('HTTP '+res.status);
+        alert('Atividade copiada/atualizada na Base de Dados Técnica.');
+    }catch(e){
+        console.error(e);
+        alert('Esta operação requer o serviço do servidor ligado à Base de Dados Técnica .bdd.');
+    }
+}
+
+function apuCopyPasteActivityComposition(){
+    const a=apuGetActivity(APU_UI.selectedActivityId);
+    if(!a)return;
+
+    if(window.__apuActivityClipboard && window.__apuActivityClipboard.sourceId!==a.id){
+        a.recursos=JSON.parse(JSON.stringify(window.__apuActivityClipboard.recursos||[]));
+        a.actividades=JSON.parse(JSON.stringify(window.__apuActivityClipboard.actividades||[]));
+        delete window.__apuActivityClipboard;
+        apuSave(false);
+        apuRender();
+        alert('Composição da atividade colada.');
+        return;
+    }
+
+    window.__apuActivityClipboard={
+        sourceId:a.id,
+        recursos:JSON.parse(JSON.stringify(a.recursos||[])),
+        actividades:JSON.parse(JSON.stringify(a.actividades||[]))
+    };
+    alert('Composição da atividade copiada. Selecione a atividade de destino e execute novamente para colar.');
+}
+
+function apuResourceContext(e,id){
+    APU_UI.selectedResourceId=id;
+    return apuShowContext(e,[
+        ['Editar texto / preço',`apuEditResource('${id}')`],
+        ['Ver utilização',`apuShowResourceUsage('${id}')`],
+        ['Copiar/Atualizar para a Base de Dados',`apuExportResourceToDatabase('${id}')`],
+        ['Criar cópia',`apuDuplicateResource('${id}')`],
+        ['Alterar tipo do recurso',`apuChangeResourceType('${id}')`],
+        ['Inserir recurso','apuEditResource()'],
+        ['Eliminar recurso','apuDeleteResource()']
+    ]);
+}
+function apuActivityContext(e,id){
+    APU_UI.selectedActivityId=id;
+    return apuShowContext(e,[
+        ['Editar preço composto',`apuOpenActivityComposition('${id}')`],
+        ['Editar texto',`apuActivityDialog('${id}')`],
+        ['Ver utilização',`apuShowActivityUsage('${id}')`],
+        ['Copiar/Atualizar para a Base de Dados',`apuExportActivityToDatabase('${id}')`],
+        ['Criar cópia',`apuDuplicateActivity('${id}')`],
+        ['Inserir atividade','apuNewActivity()'],
+        ['Eliminar','apuDeleteActivity()'],
+        ['Copiar/Colar','apuCopyPasteActivityComposition()']
+    ]);
+}
 function apuInsertMatMO(id){const a=apuGetArticle(id),p=apuProject();const mat={id:apuUid('rec'),tipo:1,nome:'Material - '+a.descricao,unidade:a.unidade,precounitario:0,data:new Date().toISOString().slice(0,10)};const mo={id:apuUid('rec'),tipo:2,nome:'Mão de Obra - '+a.descricao,unidade:'h',precounitario:0,data:new Date().toISOString().slice(0,10)};p.recursos.push(mat,mo);a.recursos.push({recursoId:mat.id,quantidade:1},{recursoId:mo.id,quantidade:1});apuSave(false);apuOpenArticleComposition(id);}
 function apuInsertSub(id){const a=apuGetArticle(id),p=apuProject();const r={id:apuUid('rec'),tipo:4,nome:a.descricao,unidade:a.unidade,precounitario:0,data:new Date().toISOString().slice(0,10)};p.recursos.push(r);a.recursos.push({recursoId:r.id,quantidade:1});apuSave(false);apuOpenArticleComposition(id);}
 function apuChangeChapterLevel(id,d){const a=apuGetArticle(id);a.capitulo=Math.max(0,apuNum(a.capitulo)+d);apuSave(false);apuRender();}
@@ -6266,7 +7126,39 @@ function apuCreateArticleFromActivity(){const p=apuProject();if(!p.actividades.l
 function apuCreateArticleFromSubcontract(){const p=apuProject();const subs=p.recursos.filter(r=>r.tipo===4);apuPicker('Subempreitadas',subs.map(r=>({id:r.id,label:r.nome})),id=>{const r=apuGetResource(id);p.artigos.push({id:apuUid('art'),ordem:p.artigos.length+1,art:'',descricao:r.nome,unidade:r.unidade,quantidade:1,margem:1,capitulo:0,bold:false,precodirecto:0,tipoprecodirecto:null,observacoes:'',revisao:0,recursos:[{recursoId:id,quantidade:1}],actividades:[]});apuSave(false);apuSetView('lpu');});}
 function apuExportArticleToDatabase(){alert('O artigo permanece disponível no projeto; a ligação à Base de Dados Técnica .bdd será executada pelo serviço de servidor, sem guardar ficheiros no Firebase.');}
 function apuReorderArticles(){const p=apuProject();p.artigos.sort((a,b)=>apuNum(a.ordem)-apuNum(b.ordem));p.artigos.forEach((a,i)=>a.ordem=i+1);apuSave(false);apuRender();}
-function apuShowArticleResources(id){const a=apuGetArticle(id);const rows=(a.recursos||[]).map(c=>{const r=apuGetResource(c.recursoId);return `<tr><td>${apuEsc(r?.nome)}</td><td class="num">${apuNum(c.quantidade)}</td><td class="num">${apuMoney(r?.precounitario)}</td></tr>`}).join('');apuDialog('Recursos do artigo',apuTable(['Recurso','Quantidade','P. Unit.'],rows),null,false);}
+function apuShowArticleResources(id){
+    const p=apuProject(),a=apuGetArticle(id);
+    if(!p||!a)return;
+
+    const rows=[];
+
+    (a.recursos||[]).forEach(c=>{
+        const r=apuGetResource(c.recursoId);
+        rows.push(`<tr>
+            <td>Recurso</td>
+            <td>${apuEsc(r?.nome)}</td>
+            <td class="num">${apuNum(c.quantidade)}</td>
+            <td class="num">${apuMoney(r?.precounitario)}</td>
+        </tr>`);
+    });
+
+    if(apuNum(a.precodirecto)>0){
+        const pd=p.precosDirectos.find(x=>x.id===a.tipoprecodirecto);
+        rows.push(`<tr>
+            <td>Preço Direto</td>
+            <td>${apuEsc(pd?.nome||'Preço Direto')}</td>
+            <td class="num">1</td>
+            <td class="num">${apuMoney(a.precodirecto)}</td>
+        </tr>`);
+    }
+
+    apuDialog(
+        'Recursos e P. diretos do artigo',
+        apuTable(['Tipo','Recurso / P. Direto','Quantidade','P. Unit.'],rows.join('')),
+        null,
+        false
+    );
+}
 function apuShowResourceUsage(id){const p=apuProject();const arr=[];p.artigos.forEach(a=>{if((a.recursos||[]).some(c=>c.recursoId===id))arr.push('Artigo: '+a.art+' '+a.descricao)});p.actividades.forEach(a=>{if((a.recursos||[]).some(c=>c.recursoId===id))arr.push('Atividade: '+a.nome)});alert(arr.length?arr.join('\n'):'Recurso sem utilização.');}
 function apuShowActivityUsage(id){const p=apuProject();const arr=[];p.artigos.forEach(a=>{if((a.actividades||[]).some(c=>c.actividadeId===id))arr.push('Artigo: '+a.art+' '+a.descricao)});p.actividades.forEach(a=>{if((a.actividades||[]).some(c=>c.actividadeId===id))arr.push('Atividade: '+a.nome)});alert(arr.length?arr.join('\n'):'Atividade sem utilização.');}
 function apuDuplicateResource(id){const p=apuProject(),r=apuGetResource(id);p.recursos.push({...JSON.parse(JSON.stringify(r)),id:apuUid('rec'),nome:r.nome+' - Cópia'});apuSave(false);apuRender();}
@@ -6279,20 +7171,49 @@ function apuDuplicateActivity(id){const p=apuProject(),a=apuGetActivity(id);p.ac
 
 function apuNormalizeProject(p) {
     if (!p || typeof p !== 'object') return null;
+
     const base = apuDefaultProject(p.nome || 'Orçamento');
     const arrays = [
         'grupos','precosDirectos','recursos','actividades','artigos','medicoes',
-        'mapasComparativos','compras','autos','trabalhosAMais','reorcamento','custos',
+        'mapasComparativos','compras','autos','autosArtigos','trabalhosAMais','custos',
         'faturas','planeamentos','planoTrabalhos','planoRecursos','planoPagamentos',
-        'planoCompras','planeamentoSemanal'
+        'planoCompras','planeamentoSemanal','matMOResourceIds'
     ];
-    arrays.forEach(k => { if (!Array.isArray(p[k])) p[k] = []; });
+
+    arrays.forEach(k => {
+        if (!Array.isArray(p[k])) p[k] = JSON.parse(JSON.stringify(base[k] || []));
+    });
+
+    if (!p.grupos.some(g => g && (g.id === 'geral' || String(g.nome || '').trim().toLowerCase() === 'geral'))) {
+        p.grupos.unshift({id:'geral', nome:'geral', sistema:true});
+    }
+    const geral = p.grupos.find(g => g && (g.id === 'geral' || String(g.nome || '').trim().toLowerCase() === 'geral'));
+    if (geral) {
+        geral.id = 'geral';
+        geral.nome = 'geral';
+        geral.sistema = true;
+    }
+
     p.propriedades = {...base.propriedades, ...(p.propriedades || {})};
     p.margensDiferenciais = {...base.margensDiferenciais, ...(p.margensDiferenciais || {})};
     p.margensCapitulos = p.margensCapitulos || {};
     p.indiretos = {...base.indiretos, ...(p.indiretos || {})};
-    if (!Array.isArray(p.indiretos.fixos)) p.indiretos.fixos = [];
-    if (!Array.isArray(p.indiretos.percentuais)) p.indiretos.percentuais = [];
+    ['fixos','percentuais','actividades','recursos'].forEach(k=>{
+        if (!Array.isArray(p.indiretos[k])) p.indiretos[k]=[];
+    });
+
+    if (!p.medicaoModo) p.medicaoModo = 'verificacao';
+    p.planeamentoConfig = {...base.planeamentoConfig, ...(p.planeamentoConfig || {})};
+
+    if (Array.isArray(p.reorcamento)) {
+        p.reorcamento = JSON.parse(JSON.stringify(base.reorcamento));
+    } else {
+        p.reorcamento = {...base.reorcamento, ...(p.reorcamento || {})};
+        ['artigos','recursos','actividades','precosDirectos','medicoes'].forEach(k=>{
+            if(!Array.isArray(p.reorcamento[k])) p.reorcamento[k]=[];
+        });
+    }
+
     p.artigos.forEach((a,i)=>{
         if(!a.id)a.id=apuUid('art');
         if(!Array.isArray(a.recursos))a.recursos=[];
@@ -6300,31 +7221,59 @@ function apuNormalizeProject(p) {
         if(a.ordem===undefined||a.ordem===null)a.ordem=i+1;
         if(a.margem===undefined||a.margem===null)a.margem=1;
         if(a.bold===undefined)a.bold=false;
+        if(a.capitulo===undefined||a.capitulo===null)a.capitulo=0;
     });
+
     p.actividades.forEach(a=>{
         if(!a.id)a.id=apuUid('act');
         if(!Array.isArray(a.recursos))a.recursos=[];
         if(!Array.isArray(a.actividades))a.actividades=[];
+        if(!a.grupo)a.grupo='geral';
     });
-    p.recursos.forEach(r=>{if(!r.id)r.id=apuUid('rec');});
+
+    p.recursos.forEach(r=>{
+        if(!r.id)r.id=apuUid('rec');
+        if(!r.grupo)r.grupo='geral';
+    });
+
     p.mapasComparativos.forEach(m=>{
         if(!m.id)m.id=apuUid('mc');
         if(!Array.isArray(m.artigos))m.artigos=[];
         if(!Array.isArray(m.linhas))m.linhas=[];
         if(!Array.isArray(m.propostas))m.propostas=[];
+        if(m.arquivado===undefined)m.arquivado=false;
     });
+
     return p;
 }
 
 function apuEnsureUiState() {
     const defaults = {
-        selectedCompositionType:null, selectedCompositionIndex:null,
-        selectedActivityComponentType:null, selectedActivityComponentIndex:null,
-        selectedMeasurementId:null, selectedGroupId:null, selectedInvoiceId:null,
-        selectedAdditionalWorkId:null, selectedPaymentId:null, genericPlanSelection:null,
-        planningMode:'tabela'
+        selectedCompositionType:null,
+        selectedCompositionIndex:null,
+        selectedActivityComponentType:null,
+        selectedActivityComponentIndex:null,
+        selectedMeasurementId:null,
+        selectedGroupId:null,
+        selectedInvoiceId:null,
+        selectedAdditionalWorkId:null,
+        selectedPaymentId:null,
+        genericPlanSelection:null,
+        planningMode:'tabela',
+        resourceSort:'grupo',
+        activitySort:'grupo',
+        showArticleText:false,
+        showArticleObservation:false,
+        showArchivedMaps:false,
+        showArchivedAdditionalWorks:false,
+        activeAutoNumber:1,
+        autoOnlyWithValues:false,
+        selectedAutoArticleId:null,
+        selectedMapCell:null
     };
-    Object.entries(defaults).forEach(([k,v])=>{if(APU_UI[k]===undefined)APU_UI[k]=v;});
+    Object.entries(defaults).forEach(([k,v])=>{
+        if(APU_UI[k]===undefined)APU_UI[k]=v;
+    });
 }
 
 function apuInit() {
@@ -6440,13 +7389,367 @@ function apuDeleteSelectedCompositionItem(){
     APU_UI.selectedCompositionType=null;APU_UI.selectedCompositionIndex=null;
     apuSave(false);apuRenderCompositionNow();
 }
+
+function apuSetArticleComponentQuantity(tipo,index,value){
+    const a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!a)return;
+    const arr=tipo==='atividade'?a.actividades:a.recursos;
+    if(!arr[index])return;
+    arr[index].quantidade=apuNum(value);
+    apuSave(false);
+    apuUpdateStatus('Quantidade atualizada');
+    apuRenderCompositionNow();
+}
+
+function apuCompositionF2(){
+    const a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!a)return;
+    const type=APU_UI.selectedCompositionType;
+    const i=APU_UI.selectedCompositionIndex;
+    if(type===null||i===null)return alert('Selecione uma linha.');
+    if(type==='atividade'){
+        const c=a.actividades[i];
+        if(c)apuActivityDialog(c.actividadeId);
+    }else{
+        const c=a.recursos[i];
+        if(c)apuEditResource(c.recursoId);
+    }
+}
+
+function apuExplodeSelectedActivity(){
+    const a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!a)return;
+    if(APU_UI.selectedCompositionType!=='atividade')return alert('Selecione uma atividade.');
+    if((a.actividades||[]).length!==1 || (a.recursos||[]).length!==0){
+        return alert('A atividade apenas pode ser explodida quando é o único componente do artigo.');
+    }
+
+    const i=APU_UI.selectedCompositionIndex;
+    const link=a.actividades[i];
+    const act=apuGetActivity(link?.actividadeId);
+    if(!act)return;
+
+    const fator=apuNum(link.quantidade)||1;
+    a.recursos=(act.recursos||[]).map(c=>({
+        recursoId:c.recursoId,
+        quantidade:fator*apuNum(c.quantidade)
+    }));
+    a.actividades=(act.actividades||[]).map(c=>({
+        actividadeId:c.actividadeId,
+        quantidade:fator*apuNum(c.quantidade)
+    }));
+
+    APU_UI.selectedCompositionType=null;
+    APU_UI.selectedCompositionIndex=null;
+    apuSave(false);
+    apuRenderCompositionNow();
+}
+
+function apuTransformArticleIntoActivity(){
+    const p=apuProject();
+    const a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!p||!a)return;
+    if(!(a.recursos||[]).length && !(a.actividades||[]).length){
+        return alert('O artigo não possui componentes.');
+    }
+
+    const act={
+        id:apuUid('act'),
+        grupo:'geral',
+        nome:a.descricao||'Nova atividade',
+        unidade:a.unidade||'',
+        recursos:JSON.parse(JSON.stringify(a.recursos||[])),
+        actividades:JSON.parse(JSON.stringify(a.actividades||[]))
+    };
+
+    p.actividades.push(act);
+    a.recursos=[];
+    a.actividades=[{actividadeId:act.id,quantidade:1}];
+    apuSave(false);
+    apuRenderCompositionNow();
+}
+
+function apuDuplicateSelectedCompositionItem(){
+    const p=apuProject();
+    const a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!p||!a)return;
+    const t=APU_UI.selectedCompositionType,i=APU_UI.selectedCompositionIndex;
+    if(t===null||i===null)return alert('Selecione uma linha.');
+
+    if(t==='atividade'){
+        const c=a.actividades[i],src=apuGetActivity(c?.actividadeId);
+        if(!src)return;
+        const cp={...JSON.parse(JSON.stringify(src)),id:apuUid('act'),nome:(src.nome||'Atividade')+' - Cópia'};
+        p.actividades.push(cp);
+        a.actividades.splice(i+1,0,{actividadeId:cp.id,quantidade:apuNum(c.quantidade)});
+    }else{
+        const c=a.recursos[i],src=apuGetResource(c?.recursoId);
+        if(!src)return;
+        const cp={...JSON.parse(JSON.stringify(src)),id:apuUid('rec'),nome:(src.nome||'Recurso')+' - Cópia'};
+        p.recursos.push(cp);
+        a.recursos.splice(i+1,0,{recursoId:cp.id,quantidade:apuNum(c.quantidade)});
+    }
+
+    apuSave(false);
+    apuRenderCompositionNow();
+}
+
+function apuReplaceSelectedCompositionItem(){
+    const a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!a)return;
+    const t=APU_UI.selectedCompositionType,i=APU_UI.selectedCompositionIndex;
+    if(t===null||i===null)return alert('Selecione uma linha.');
+
+    if(t==='atividade'){
+        apuPickActivity(id=>{
+            a.actividades[i].actividadeId=id;
+            apuSave(false);
+            apuRenderCompositionNow();
+        });
+    }else{
+        apuPickResource(id=>{
+            a.recursos[i].recursoId=id;
+            apuSave(false);
+            apuRenderCompositionNow();
+        });
+    }
+}
+
+function apuCompositionContext(e,tipo,index){
+    APU_UI.selectedCompositionType=tipo;
+    APU_UI.selectedCompositionIndex=index;
+
+    const items=[];
+    if(tipo==='atividade'){
+        items.push(
+            ['Editar atividade','apuOpenSelectedCompositionActivity()'],
+            ['Explodir atividade','apuExplodeSelectedActivity()']
+        );
+    }
+    items.push(
+        ['Editar texto','apuCompositionF2()'],
+        ['sep',''],
+        ['Inserir atividade','apuInsertActivityToArticle(false,false)'],
+        ['Inserir recurso','apuInsertResourceToArticle(false,false)'],
+        ['Inserir Mat.+M.O.','apuQuickMatMO()'],
+        ['Inserir Sub.','apuQuickSub()'],
+        ['sep',''],
+        ['Ver utilização','apuShowSelectedCompositionUsage()'],
+        ['Eliminar','apuDeleteSelectedCompositionItem()'],
+        ['Transformar em atividade','apuTransformArticleIntoActivity()'],
+        ['Duplicar atividade / recurso','apuDuplicateSelectedCompositionItem()'],
+        ['Substituir atividade / recurso','apuReplaceSelectedCompositionItem()']
+    );
+    return apuShowContext(e,items);
+}
+
+function apuOpenSelectedCompositionActivity(){
+    const a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!a||APU_UI.selectedCompositionType!=='atividade')return;
+    const c=a.actividades[APU_UI.selectedCompositionIndex];
+    if(c)apuOpenActivityComposition(c.actividadeId);
+}
+
+function apuShowSelectedCompositionUsage(){
+    const a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!a)return;
+    if(APU_UI.selectedCompositionType==='atividade'){
+        const c=a.actividades[APU_UI.selectedCompositionIndex];
+        if(c)apuShowActivityUsage(c.actividadeId);
+    }else if(APU_UI.selectedCompositionType==='recurso'){
+        const c=a.recursos[APU_UI.selectedCompositionIndex];
+        if(c)apuShowResourceUsage(c.recursoId);
+    }
+}
+
+function apuToggleArticleText(){
+    APU_UI.showArticleText=!APU_UI.showArticleText;
+    apuRenderCompositionNow();
+}
+
+function apuToggleArticleObservation(){
+    APU_UI.showArticleObservation=!APU_UI.showArticleObservation;
+    apuRenderCompositionNow();
+}
+
+function apuSaveVisibleObservation(){
+    const a=apuGetArticle(APU_UI.selectedArticleId);
+    const el=document.getElementById('apu-article-observation');
+    if(!a||!el)return;
+    a.observacoes=el.value;
+    apuSave(false);
+    apuUpdateStatus('Observação guardada');
+    apuRenderCompositionNow();
+}
+
+function apuQuickMatMO(){
+    const p=apuProject(),a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!p||!a)return;
+    if((a.recursos||[]).length || (a.actividades||[]).length){
+        return alert('Este comando apenas pode ser utilizado quando o artigo está vazio.');
+    }
+
+    const mo=p.recursos.filter(r=>r.tipo===2);
+    const material={
+        id:apuUid('rec'),
+        grupo:'geral',
+        tipo:1,
+        nome:a.descricao||'Material',
+        unidade:a.unidade||'',
+        precounitario:0,
+        data:new Date().toISOString().slice(0,10)
+    };
+    p.recursos.push(material);
+    a.recursos.push({recursoId:material.id,quantidade:1});
+
+    const stored=(p.matMOResourceIds||[]).filter(id=>mo.some(r=>r.id===id));
+    if(stored.length){
+        stored.forEach(id=>a.recursos.push({recursoId:id,quantidade:1}));
+        apuSave(false);
+        apuRenderCompositionNow();
+        return;
+    }
+
+    if(!mo.length){
+        apuSave(false);
+        apuRenderCompositionNow();
+        return alert('Foi criado o material. Não existem recursos de Mão de Obra no orçamento.');
+    }
+
+    const body=`<div style="max-height:360px;overflow:auto">
+        ${mo.map(r=>`<label style="display:flex;gap:8px;align-items:center;padding:4px">
+            <input type="checkbox" data-apu-mo="${r.id}" style="width:auto">
+            <span>${apuEsc(r.nome)}</span>
+        </label>`).join('')}
+    </div>`;
+
+    apuDialog('Selecionar recursos de Mão de Obra',body,()=>{
+        const ids=[...document.querySelectorAll('[data-apu-mo]:checked')].map(x=>x.dataset.apuMo);
+        p.matMOResourceIds=ids;
+        ids.forEach(id=>a.recursos.push({recursoId:id,quantidade:1}));
+        apuDialogClose();
+        apuSave(false);
+        apuRenderCompositionNow();
+    });
+}
+
+function apuQuickSub(){
+    const p=apuProject(),a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!p||!a)return;
+    if((a.recursos||[]).length || (a.actividades||[]).length){
+        return alert('Este comando apenas pode ser utilizado quando o artigo está vazio.');
+    }
+
+    const r={
+        id:apuUid('rec'),
+        grupo:'geral',
+        tipo:4,
+        nome:a.descricao||'Subempreitada',
+        unidade:a.unidade||'',
+        precounitario:0,
+        data:new Date().toISOString().slice(0,10)
+    };
+    p.recursos.push(r);
+    a.recursos.push({recursoId:r.id,quantidade:1});
+    apuSave(false);
+    apuRenderCompositionNow();
+}
+
 function apuViewComposition(){
- const a=apuGetArticle(APU_UI.selectedArticleId); if(!a)return apuNoProjectHtml();
- const rows=[];
- (a.actividades||[]).forEach((c,i)=>{const x=apuGetActivity(c.actividadeId);const sel=APU_UI.selectedCompositionType==='atividade'&&APU_UI.selectedCompositionIndex===i?'selected':'';rows.push(`<tr class="${sel}" onclick="apuSelectCompositionItem('atividade',${i},event)" ondblclick="apuEditSelectedCompositionItem()"><td>Ativ.</td><td>${apuEsc(x?.id||'')}</td><td>${apuEsc(x?.nome||'')}</td><td>${apuEsc(x?.unidade||'')}</td><td class="num">${apuNum(c.quantidade)}</td><td class="num">${apuMoney(apuActivityPrice(c.actividadeId,new Set()))}</td><td class="num">${apuMoney(apuNum(c.quantidade)*apuActivityPrice(c.actividadeId,new Set()))}</td></tr>`);});
- (a.recursos||[]).forEach((c,i)=>{const x=apuGetResource(c.recursoId);const sel=APU_UI.selectedCompositionType==='recurso'&&APU_UI.selectedCompositionIndex===i?'selected':'';rows.push(`<tr class="${sel}" onclick="apuSelectCompositionItem('recurso',${i},event)" ondblclick="apuEditSelectedCompositionItem()"><td>Rec.</td><td>${apuEsc(x?.id||'')}</td><td>${apuEsc(x?.nome||'')}</td><td>${apuEsc(x?.unidade||'')}</td><td class="num">${apuNum(c.quantidade)}</td><td class="num">${apuMoney(x?.precounitario)}</td><td class="num">${apuMoney(apuNum(c.quantidade)*apuNum(x?.precounitario))}</td></tr>`);});
- const tools=`<button class="apu-tool danger" onclick="apuDeleteSelectedCompositionItem()">Elimina</button><button class="apu-tool" onclick="apuInsertActivityToArticle(false,false)">Inserir Ativ</button><button class="apu-tool" onclick="apuInsertActivityToArticle(true,false)">Inserir Ativ +</button><button class="apu-tool" onclick="apuInsertActivityToArticle(true,true)">Inserir Ativ ++</button><button class="apu-tool" onclick="apuInsertResourceToArticle(false,false)">Inserir Rec</button><button class="apu-tool" onclick="apuInsertResourceToArticle(true,false)">Inserir Rec +</button><button class="apu-tool" onclick="apuInsertResourceToArticle(true,true)">Inserir Rec ++</button><button class="apu-tool" onclick="apuShowArticleInfo()">Inf.</button><button class="apu-tool" onclick="apuToggleArticleReview()">Artigo em revisão</button><button class="apu-tool" onclick="apuArticleObservation()">Observ.</button><button class="apu-tool" onclick="apuEditArticle()">Texto Art.</button>`;
- return `${apuViewHeader('Composição de preços do artigo',`${apuEsc(a.art)} - ${apuEsc(a.descricao)}`)}<div class="apu-toolbar-main">${tools}</div><div class="apu-view-content">${apuTable(['Tipo','Código','Descrição','Un.','Quantidade','P. Unitário','P. Total'],rows.join(''))}</div>${apuBottom(`<button class="apu-tool" onclick="apuEditSelectedCompositionItem()">Editar quantidade</button><button class="apu-tool" onclick="apuSetView('lpu')">Sair</button><span style="margin-left:auto;font-weight:bold">P. Artigo: ${apuMoney(apuArticleUnitPrice(a))}</span>`)}`;
+    const a=apuGetArticle(APU_UI.selectedArticleId);
+    if(!a)return apuNoProjectHtml();
+
+    const rows=[];
+
+    (a.actividades||[]).forEach((c,i)=>{
+        const x=apuGetActivity(c.actividadeId);
+        const sel=APU_UI.selectedCompositionType==='atividade'&&APU_UI.selectedCompositionIndex===i?'selected':'';
+        rows.push(`<tr class="${sel}"
+                       onclick="apuSelectCompositionItem('atividade',${i},event)"
+                       ondblclick="apuOpenActivityComposition('${c.actividadeId}')"
+                       oncontextmenu="return apuCompositionContext(event,'atividade',${i})">
+            <td>Ativ.</td>
+            <td>${apuEsc(x?.id||'')}</td>
+            <td>${apuEsc(x?.nome||'')}</td>
+            <td>${apuEsc(x?.unidade||'')}</td>
+            <td class="num">
+                <input type="number" step="0.0001" value="${apuNum(c.quantidade)}"
+                       style="width:80px;text-align:right"
+                       onchange="apuSetArticleComponentQuantity('atividade',${i},this.value)">
+            </td>
+            <td class="num">${apuMoney(apuActivityPrice(c.actividadeId,new Set()))}</td>
+            <td class="num">${apuMoney(apuNum(c.quantidade)*apuActivityPrice(c.actividadeId,new Set()))}</td>
+        </tr>`);
+    });
+
+    (a.recursos||[]).forEach((c,i)=>{
+        const x=apuGetResource(c.recursoId);
+        const sel=APU_UI.selectedCompositionType==='recurso'&&APU_UI.selectedCompositionIndex===i?'selected':'';
+        rows.push(`<tr class="${sel}"
+                       onclick="apuSelectCompositionItem('recurso',${i},event)"
+                       oncontextmenu="return apuCompositionContext(event,'recurso',${i})">
+            <td>Rec.</td>
+            <td>${apuEsc(x?.id||'')}</td>
+            <td>${apuEsc(x?.nome||'')}</td>
+            <td>${apuEsc(x?.unidade||'')}</td>
+            <td class="num">
+                <input type="number" step="0.0001" value="${apuNum(c.quantidade)}"
+                       style="width:80px;text-align:right"
+                       onchange="apuSetArticleComponentQuantity('recurso',${i},this.value)">
+            </td>
+            <td class="num">
+                <input type="number" step="0.0001" value="${apuNum(x?.precounitario)}"
+                       style="width:95px;text-align:right"
+                       onchange="apuSetResourcePrice('${c.recursoId}',this.value)">
+            </td>
+            <td class="num">${apuMoney(apuNum(c.quantidade)*apuNum(x?.precounitario))}</td>
+        </tr>`);
+    });
+
+    const tools=`
+        <button class="apu-tool danger" onclick="apuDeleteSelectedCompositionItem()">Elimina</button>
+        <button class="apu-tool" onclick="apuInsertActivityToArticle(false,false)">Inserir Ativ</button>
+        <button class="apu-tool" onclick="apuInsertActivityToArticle(true,false)">Inserir Ativ +</button>
+        <button class="apu-tool" onclick="apuQuickMatMO()">Inserir Ativ ++</button>
+        <button class="apu-tool" onclick="apuInsertResourceToArticle(false,false)">Inserir Rec</button>
+        <button class="apu-tool" onclick="apuInsertResourceToArticle(true,false)">Inserir Rec +</button>
+        <button class="apu-tool" onclick="apuQuickSub()">Inserir Rec ++</button>
+        <button class="apu-tool" onclick="apuShowArticleInfo()">Inf.</button>
+        <button class="apu-tool ${a.revisao?'active':''}" onclick="apuToggleArticleReview()">Artigo em revisão</button>
+        <button class="apu-tool ${APU_UI.showArticleObservation?'active':''}" onclick="apuToggleArticleObservation()">Observ.</button>
+        <button class="apu-tool ${APU_UI.showArticleText?'active':''}" onclick="apuToggleArticleText()">Texto Art.</button>
+    `;
+
+    const articleText=APU_UI.showArticleText
+        ? `<div class="apu-panel" style="margin:0 0 7px 0">
+             <div class="apu-panel-title">Texto do artigo</div>
+             <div class="apu-panel-body">${apuEsc(a.descricao)}</div>
+           </div>`
+        : '';
+
+    const obs=APU_UI.showArticleObservation
+        ? `<div class="apu-panel" style="margin:7px 0 0">
+             <div class="apu-panel-title">Observações</div>
+             <div class="apu-panel-body">
+                <textarea id="apu-article-observation" style="width:100%;min-height:90px;box-sizing:border-box">${apuEsc(a.observacoes||'')}</textarea>
+                <div style="margin-top:5px;text-align:right">
+                    <button class="apu-tool" onclick="apuSaveVisibleObservation()">Guardar observação</button>
+                </div>
+             </div>
+           </div>`
+        : '';
+
+    return `${apuViewHeader('Composição de preços do artigo',`${apuEsc(a.art)} - ${apuEsc(a.descricao)}`)}
+        <div class="apu-toolbar-main">${tools}</div>
+        <div class="apu-view-content">
+            ${articleText}
+            ${apuTable(['Tipo','Código','Descrição','Un.','Quantidade','P. Unitário','P. Total'],rows.join(''))}
+            ${obs}
+        </div>
+        ${apuBottom(`
+            <button class="apu-tool" onclick="apuSetView('lpu')">Sair</button>
+            <span style="margin-left:auto;font-weight:bold">P. Artigo: ${apuMoney(apuArticleUnitPrice(a))}</span>
+        `)}`;
 }
 function apuRenderCompositionNow(){
     const el=document.getElementById('apu-main-view');if(!el)return;
@@ -6456,38 +7759,166 @@ function apuRemoveArticleActivity(i){const a=apuGetArticle(APU_UI.selectedArticl
 function apuRemoveArticleResource(i){const a=apuGetArticle(APU_UI.selectedArticleId);if(!a)return;a.recursos.splice(i,1);APU_UI.selectedCompositionType=null;APU_UI.selectedCompositionIndex=null;apuSave(false);apuRenderCompositionNow();}
 
 function apuInsertActivityToArticle(createNew,quick){
-    const a=apuGetArticle(APU_UI.selectedArticleId),p=apuProject();if(!a||!p)return;
-    if(!createNew){return apuPickActivity(id=>{a.actividades.push({actividadeId:id,quantidade:1});apuSave(false);apuRenderCompositionNow();});}
-    if(quick){
-        const act={id:apuUid('act'),grupo:null,nome:a.descricao||'Nova atividade',unidade:a.unidade||'',recursos:[],actividades:[]};
-        const mat={id:apuUid('rec'),grupo:null,tipo:1,nome:'Material - '+(a.descricao||''),unidade:a.unidade||'',precounitario:0,data:new Date().toISOString().slice(0,10)};
-        const mo={id:apuUid('rec'),grupo:null,tipo:2,nome:'Mão de Obra - '+(a.descricao||''),unidade:'h',precounitario:0,data:new Date().toISOString().slice(0,10)};
-        p.recursos.push(mat,mo);act.recursos.push({recursoId:mat.id,quantidade:1},{recursoId:mo.id,quantidade:1});p.actividades.push(act);a.actividades.push({actividadeId:act.id,quantidade:1});apuSave(false);apuRenderCompositionNow();return;
+    const a=apuGetArticle(APU_UI.selectedArticleId),p=apuProject();
+    if(!a||!p)return;
+
+    if(!createNew){
+        return apuPickActivity(id=>{
+            a.actividades.push({actividadeId:id,quantidade:1});
+            apuSave(false);
+            apuRenderCompositionNow();
+        });
     }
-    apuDialog('Inserir Ativ +',`<div class="apu-form-grid"><div class="apu-form-span-2"><label>Descrição</label><input id="apu-newact-nome" value="${apuEsc(a.descricao||'')}"></div><div><label>Unidade</label><input id="apu-newact-un" value="${apuEsc(a.unidade||'')}"></div></div>`,()=>{
-        const act={id:apuUid('act'),grupo:null,nome:document.getElementById('apu-newact-nome').value,unidade:document.getElementById('apu-newact-un').value,recursos:[],actividades:[]};
-        p.actividades.push(act);a.actividades.push({actividadeId:act.id,quantidade:1});apuDialogClose();apuSave(false);apuRenderCompositionNow();
-    });
+
+    const act={
+        id:apuUid('act'),
+        grupo:'geral',
+        nome:a.descricao||'Nova atividade',
+        unidade:a.unidade||'',
+        recursos:[],
+        actividades:[]
+    };
+    p.actividades.push(act);
+    a.actividades.push({actividadeId:act.id,quantidade:1});
+    apuSave(false);
+    apuRenderCompositionNow();
 }
 function apuInsertResourceToArticle(createNew,quick){
-    const a=apuGetArticle(APU_UI.selectedArticleId),p=apuProject();if(!a||!p)return;
-    if(!createNew){return apuPickResource(id=>{a.recursos.push({recursoId:id,quantidade:1});apuSave(false);apuRenderCompositionNow();});}
-    const tipo=quick?4:1;
-    apuDialog(quick?'Inserir Rec ++ / Subempreitada':'Inserir Rec +',`<div class="apu-form-grid"><div><label>Tipo</label><select id="apu-newrec-tipo">${[1,2,3,4,5].map(t=>`<option value="${t}" ${t===tipo?'selected':''}>${apuResourceTypeLabel(t)}</option>`).join('')}</select></div><div class="apu-form-span-2"><label>Descrição</label><input id="apu-newrec-nome" value="${apuEsc(quick?a.descricao:'')}"></div><div><label>Unidade</label><input id="apu-newrec-un" value="${apuEsc(a.unidade||'')}"></div><div><label>Preço Unitário</label><input id="apu-newrec-preco" type="number" step="0.0001" value="0"></div></div>`,()=>{
-        const rec={id:apuUid('rec'),grupo:null,tipo:apuNum(document.getElementById('apu-newrec-tipo').value),nome:document.getElementById('apu-newrec-nome').value,unidade:document.getElementById('apu-newrec-un').value,precounitario:apuNum(document.getElementById('apu-newrec-preco').value),data:new Date().toISOString().slice(0,10)};
-        p.recursos.push(rec);a.recursos.push({recursoId:rec.id,quantidade:1});apuDialogClose();apuSave(false);apuRenderCompositionNow();
-    });
+    const a=apuGetArticle(APU_UI.selectedArticleId),p=apuProject();
+    if(!a||!p)return;
+
+    if(!createNew){
+        return apuPickResource(id=>{
+            a.recursos.push({recursoId:id,quantidade:1});
+            apuSave(false);
+            apuRenderCompositionNow();
+        });
+    }
+
+    const rec={
+        id:apuUid('rec'),
+        grupo:'geral',
+        tipo:1,
+        nome:a.descricao||'Novo recurso',
+        unidade:a.unidade||'',
+        precounitario:0,
+        data:new Date().toISOString().slice(0,10)
+    };
+    p.recursos.push(rec);
+    a.recursos.push({recursoId:rec.id,quantidade:1});
+    apuSave(false);
+    apuRenderCompositionNow();
+}
+
+
+function apuSetResourcePrice(id,value){
+    const r=apuGetResource(id);
+    if(!r)return;
+    r.precounitario=apuNum(value);
+    r.data=new Date().toISOString().slice(0,10);
+    apuSave(false);
+    apuUpdateStatus('Preço do recurso atualizado');
+    apuRender();
 }
 
 function apuViewResources(){
- const p=apuProject(); const totals=apuResourceTotals();
- const rows=p.recursos.slice().sort((a,b)=>(a.grupo||'').toString().localeCompare((b.grupo||'').toString())||String(a.nome||'').localeCompare(String(b.nome||''))).map(r=>`<tr class="${APU_UI.selectedResourceId===r.id?'selected':''}" onclick="apuSelectVisualRow(event,'selectedResourceId','${r.id}')" ondblclick="apuEditResource('${r.id}')" oncontextmenu="return apuResourceContext(event,'${r.id}')"><td>${apuEsc(apuResourceTypeLabel(r.tipo))}</td><td>${apuEsc(r.nome)}</td><td>${apuEsc(r.unidade)}</td><td class="num">${apuNum(totals[r.id]?.q).toLocaleString('pt-PT',{maximumFractionDigits:4})}</td><td class="num">${apuMoney(r.precounitario)}</td><td class="num">${apuMoney(totals[r.id]?.total)}</td><td>${apuEsc(r.data||'')}</td></tr>`).join('');
- return `${apuViewHeader('Lista de Recursos','Quantidade total utilizada no orçamento, preço unitário e preço total')}<div class="apu-view-content">${apuTable(['Tipo','Descrição','Un.','Quant. total','P. Unit','P. Total','Data do registo'],rows)}</div>${apuBottom(`<button class="apu-tool danger" onclick="apuDeleteResource()">Eliminar Rec.</button><button class="apu-tool" onclick="apuEditResource()">Inserir Rec.</button><button class="apu-tool" onclick="APU_UI.selectedResourceId?apuEditResource(APU_UI.selectedResourceId):alert('Selecione um recurso.')">Editar</button><button class="apu-tool" onclick="apuSortResourcesByTotal()">Ordenar p/ total</button>`)}`;
+    const p=apuProject();
+    const totals=apuResourceTotals();
+
+    let data=p.recursos.slice();
+    if(APU_UI.resourceSort==='total'){
+        data.sort((a,b)=>
+            apuNum(totals[b.id]?.total)-apuNum(totals[a.id]?.total) ||
+            String(a.nome||'').localeCompare(String(b.nome||''),'pt-PT')
+        );
+    }else{
+        data.sort((a,b)=>{
+            const ga=p.grupos.find(g=>g.id===a.grupo)?.nome||'geral';
+            const gb=p.grupos.find(g=>g.id===b.grupo)?.nome||'geral';
+            return ga.localeCompare(gb,'pt-PT') || String(a.nome||'').localeCompare(String(b.nome||''),'pt-PT');
+        });
+    }
+
+    const rows=data.map(r=>{
+        const grupo=p.grupos.find(g=>g.id===r.grupo)?.nome||'geral';
+        return `<tr class="${APU_UI.selectedResourceId===r.id?'selected':''}"
+                    onclick="apuSelectVisualRow(event,'selectedResourceId','${r.id}')"
+                    oncontextmenu="return apuResourceContext(event,'${r.id}')">
+            <td>${apuEsc(grupo)}</td>
+            <td>${apuEsc(apuResourceTypeLabel(r.tipo))}</td>
+            <td>${apuEsc(r.nome)}</td>
+            <td>${apuEsc(r.unidade)}</td>
+            <td class="num">${apuNum(totals[r.id]?.q).toLocaleString('pt-PT',{maximumFractionDigits:4})}</td>
+            <td class="num">
+                <input type="number" step="0.0001" value="${apuNum(r.precounitario)}"
+                       style="width:95px;text-align:right"
+                       onchange="apuSetResourcePrice('${r.id}',this.value)">
+            </td>
+            <td class="num">${apuMoney(totals[r.id]?.total)}</td>
+            <td>${apuEsc(r.data||'')}</td>
+        </tr>`;
+    }).join('');
+
+    return `${apuViewHeader(
+        'Lista de Recursos',
+        'Quantidade total utilizada no orçamento, preço unitário e preço total'
+    )}
+    <div class="apu-view-content">
+        ${apuTable(['Grupo','Tipo','Descrição','Un.','Quant. total','P. Unit','P. Total','Data do registo'],rows)}
+    </div>
+    ${apuBottom(`
+        <button class="apu-tool danger" onclick="apuDeleteResource()">Eliminar Rec.</button>
+        <button class="apu-tool" onclick="apuEditResource()">Inserir Rec.</button>
+        <button class="apu-tool" onclick="APU_UI.selectedResourceId?apuEditResource(APU_UI.selectedResourceId):alert('Selecione um recurso.')">Editar</button>
+        <button class="apu-tool ${APU_UI.resourceSort==='total'?'active':''}" onclick="apuSortResourcesByTotal()">Ordenar p/ total</button>
+    `)}`;
 }
 
 function apuViewActivities(){
- const p=apuProject();const rows=p.actividades.map(a=>{const q=apuActivityTotalUsage(a.id);const pu=apuActivityPrice(a.id,new Set());return `<tr class="${APU_UI.selectedActivityId===a.id?'selected':''}" onclick="apuSelectVisualRow(event,'selectedActivityId','${a.id}')" ondblclick="apuOpenActivityComposition('${a.id}')" oncontextmenu="return apuActivityContext(event,'${a.id}')"><td>${apuEsc(a.nome)}</td><td>${apuEsc(a.unidade)}</td><td class="num">${q.toLocaleString('pt-PT',{maximumFractionDigits:4})}</td><td class="num">${apuMoney(pu)}</td><td class="num">${apuMoney(q*pu)}</td></tr>`}).join('');
- return `${apuViewHeader('Lista de Atividades','Preços compostos de suporte à orçamentação')}<div class="apu-view-content">${apuTable(['Descrição','Un.','Quant. total','P. Unit','P. Total'],rows)}</div>${apuBottom(`<button class="apu-tool danger" onclick="apuDeleteActivity()">Eliminar Atividade</button><button class="apu-tool" onclick="apuNewActivity()">Inserir Ativ.</button><button class="apu-tool" onclick="APU_UI.selectedActivityId?apuActivityDialog(APU_UI.selectedActivityId):alert('Selecione uma atividade.')">Editar</button><button class="apu-tool" onclick="apuSortActivitiesByTotal()">Ordenar p/ total</button>`)}`;
+    const p=apuProject();
+
+    let data=p.actividades.slice();
+    if(APU_UI.activitySort==='total'){
+        data.sort((a,b)=>{
+            const qa=apuActivityTotalUsage(a.id), qb=apuActivityTotalUsage(b.id);
+            return (qb*apuActivityPrice(b.id,new Set()))-(qa*apuActivityPrice(a.id,new Set())) ||
+                   String(a.nome||'').localeCompare(String(b.nome||''),'pt-PT');
+        });
+    }else{
+        data.sort((a,b)=>{
+            const ga=p.grupos.find(g=>g.id===a.grupo)?.nome||'geral';
+            const gb=p.grupos.find(g=>g.id===b.grupo)?.nome||'geral';
+            return ga.localeCompare(gb,'pt-PT') || String(a.nome||'').localeCompare(String(b.nome||''),'pt-PT');
+        });
+    }
+
+    const rows=data.map(a=>{
+        const q=apuActivityTotalUsage(a.id);
+        const pu=apuActivityPrice(a.id,new Set());
+        const grupo=p.grupos.find(g=>g.id===a.grupo)?.nome||'geral';
+        return `<tr class="${APU_UI.selectedActivityId===a.id?'selected':''}"
+                    onclick="apuSelectVisualRow(event,'selectedActivityId','${a.id}')"
+                    ondblclick="apuOpenActivityComposition('${a.id}')"
+                    oncontextmenu="return apuActivityContext(event,'${a.id}')">
+            <td>${apuEsc(grupo)}</td>
+            <td>${apuEsc(a.nome)}</td>
+            <td>${apuEsc(a.unidade)}</td>
+            <td class="num">${q.toLocaleString('pt-PT',{maximumFractionDigits:4})}</td>
+            <td class="num">${apuMoney(pu)}</td>
+            <td class="num">${apuMoney(q*pu)}</td>
+        </tr>`;
+    }).join('');
+
+    return `${apuViewHeader('Lista de Atividades','Preços compostos de suporte à orçamentação')}
+        <div class="apu-view-content">
+            ${apuTable(['Grupo','Descrição','Un.','Quant. total','P. Unit','P. Total'],rows)}
+        </div>
+        ${apuBottom(`
+            <button class="apu-tool danger" onclick="apuDeleteActivity()">Eliminar Atividade</button>
+            <button class="apu-tool" onclick="apuNewActivity()">Inserir Ativ.</button>
+            <button class="apu-tool" onclick="APU_UI.selectedActivityId?apuActivityDialog(APU_UI.selectedActivityId):alert('Selecione uma atividade.')">Editar</button>
+            <button class="apu-tool ${APU_UI.activitySort==='total'?'active':''}" onclick="apuSortActivitiesByTotal()">Ordenar p/ total</button>
+        `)}`;
 }
 function apuWouldCreateActivityCycle(parentId,childId){
     if(parentId===childId)return true;
@@ -6508,29 +7939,208 @@ function apuViewActivityComposition(){
 function apuAddActivityToActivity(){const a=apuGetActivity(APU_UI.selectedActivityId);if(!a)return;apuPickActivity(id=>{if(apuWouldCreateActivityCycle(a.id,id))return alert('A relação criaria um ciclo indireto entre atividades.');a.actividades.push({actividadeId:id,quantidade:1});apuSave(false);apuOpenActivityComposition(a.id);});}
 
 function apuViewGroups(){
- const p=apuProject();const rows=p.grupos.map(g=>`<tr class="${APU_UI.selectedGroupId===g.id?'selected':''}" onclick="apuSelectVisualRow(event,'selectedGroupId','${g.id}')"><td>${apuEsc(g.nome)}</td></tr>`).join('');
- return `${apuViewHeader('Lista de Grupos')}<div class="apu-view-content">${apuTable(['Grupo'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuNewGroup()">Inserir Grupo</button><button class="apu-tool" onclick="apuEditGroup()">Editar</button><button class="apu-tool danger" onclick="apuDeleteGroup()">Eliminar</button>`)}`;
-}
-function apuEditGroup(){const p=apuProject(),g=p.grupos.find(x=>x.id===APU_UI.selectedGroupId);if(!g)return alert('Selecione um grupo.');const n=prompt('Nome do grupo:',g.nome);if(n===null||!n.trim())return;g.nome=n.trim();apuSave(false);apuRender();}
-function apuDeleteGroup(){const p=apuProject(),id=APU_UI.selectedGroupId;if(!id)return alert('Selecione um grupo.');if(!confirm('Eliminar grupo?'))return;p.grupos=p.grupos.filter(x=>x.id!==id);p.recursos.forEach(r=>{if(r.grupo===id)r.grupo=null});p.actividades.forEach(a=>{if(a.grupo===id)a.grupo=null});APU_UI.selectedGroupId=null;apuSave(false);apuRender();}
+    const p=apuProject();
+    const rows=p.grupos
+        .slice()
+        .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt-PT'))
+        .map(g=>{
+            const usoRec=p.recursos.filter(r=>r.grupo===g.id).length;
+            const usoAct=p.actividades.filter(a=>a.grupo===g.id).length;
+            return `<tr class="${APU_UI.selectedGroupId===g.id?'selected':''}"
+                        onclick="apuSelectVisualRow(event,'selectedGroupId','${g.id}')">
+                <td>${apuEsc(g.nome)}</td>
+                <td class="num">${usoRec}</td>
+                <td class="num">${usoAct}</td>
+            </tr>`;
+        }).join('');
 
-function apuViewDirectPrices(){const p=apuProject();const rows=p.precosDirectos.map(d=>{const total=p.artigos.filter(a=>a.tipoprecodirecto===d.id).reduce((s,a)=>s+apuNum(a.quantidade)*apuNum(a.precodirecto),0);return `<tr class="${APU_UI.selectedDirectPriceId===d.id?'selected':''}" onclick="apuSelectVisualRow(event,'selectedDirectPriceId','${d.id}')"><td>${apuEsc(d.nome)}</td><td class="num">${apuMoney(total)}</td></tr>`}).join('');return `${apuViewHeader('Preços Diretos','Lista e total dos preços diretos existentes no orçamento')}<div class="apu-view-content">${apuTable(['Preço Direto','P. Total'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuNewDirectPrice()">Novo</button><button class="apu-tool" onclick="apuEditDirectPrice()">Editar</button><button class="apu-tool danger" onclick="apuDeleteDirectPrice()">Eliminar</button><button class="apu-tool" onclick="apuApplyDirectDiscount()">Aplicar desconto</button>`)}`;}
+    return `${apuViewHeader('Lista de Grupos')}
+        <div class="apu-view-content">
+            ${apuTable(['Grupo','Recursos','Atividades'],rows)}
+        </div>
+        ${apuBottom(`
+            <button class="apu-tool" onclick="apuNewGroup()">Inserir Grupo</button>
+            <button class="apu-tool" onclick="apuEditGroup()">Editar</button>
+            <button class="apu-tool danger" onclick="apuDeleteGroup()">Eliminar Grupo</button>
+        `)}`;
+}
+function apuEditGroup(){
+    const p=apuProject();
+    const g=p.grupos.find(x=>x.id===APU_UI.selectedGroupId);
+    if(!g)return alert('Selecione um grupo.');
+    if(g.id==='geral')return alert('O grupo geral não pode ser renomeado.');
+
+    const n=prompt('Nome do grupo:',g.nome);
+    if(n===null||!n.trim())return;
+    if(p.grupos.some(x=>x.id!==g.id&&String(x.nome||'').trim().toLowerCase()===n.trim().toLowerCase())){
+        return alert('Já existe um grupo com este nome.');
+    }
+    g.nome=n.trim();
+    apuSave(false);
+    apuRender();
+}
+function apuDeleteGroup(){
+    const p=apuProject();
+    const id=APU_UI.selectedGroupId;
+    if(!id)return alert('Selecione um grupo.');
+    if(id==='geral')return alert('O grupo geral está sempre presente e não pode ser eliminado.');
+
+    const usedRec=p.recursos.some(r=>r.grupo===id);
+    const usedAct=p.actividades.some(a=>a.grupo===id);
+    if(usedRec||usedAct){
+        return alert('Não é possível eliminar o grupo porque existem recursos ou atividades associados.');
+    }
+
+    if(!confirm('Eliminar grupo?'))return;
+    p.grupos=p.grupos.filter(x=>x.id!==id);
+    APU_UI.selectedGroupId=null;
+    apuSave(false);
+    apuRender();
+}
+
+
+function apuDirectPriceContext(e,id){
+    APU_UI.selectedDirectPriceId=id;
+    return apuShowContext(e,[
+        ['Editar texto','apuEditDirectPrice()'],
+        ['Aplicar desconto','apuApplyDirectDiscount()'],
+        ['Inserir preço direto','apuNewDirectPrice()'],
+        ['Eliminar preço direto','apuDeleteDirectPrice()']
+    ]);
+}
+
+function apuViewDirectPrices(){
+    const p=apuProject();
+    const rows=p.precosDirectos.map(d=>{
+        const total=p.artigos
+            .filter(a=>a.tipoprecodirecto===d.id)
+            .reduce((s,a)=>s+apuNum(a.quantidade)*apuNum(a.precodirecto),0);
+
+        return `<tr class="${APU_UI.selectedDirectPriceId===d.id?'selected':''}"
+                    onclick="apuSelectVisualRow(event,'selectedDirectPriceId','${d.id}')"
+                    oncontextmenu="return apuDirectPriceContext(event,'${d.id}')">
+            <td>${apuEsc(d.nome)}</td>
+            <td class="num">${apuMoney(total)}</td>
+        </tr>`;
+    }).join('');
+
+    return `${apuViewHeader('Preços Diretos','Lista e total dos preços diretos existentes no orçamento')}
+        <div class="apu-view-content">${apuTable(['Preço Direto','P. Total'],rows)}</div>
+        ${apuBottom(`
+            <button class="apu-tool" onclick="apuNewDirectPrice()">Inserir P. Direto</button>
+            <button class="apu-tool" onclick="apuEditDirectPrice()">Editar</button>
+            <button class="apu-tool danger" onclick="apuDeleteDirectPrice()">Eliminar P. Direto</button>
+            <button class="apu-tool" onclick="apuApplyDirectDiscount()">Aplicar desconto</button>
+        `)}`;
+}
 function apuEditDirectPrice(){const p=apuProject(),d=p.precosDirectos.find(x=>x.id===APU_UI.selectedDirectPriceId);if(!d)return alert('Selecione um preço direto.');const n=prompt('Nome do Preço Direto:',d.nome);if(n===null||!n.trim())return;d.nome=n.trim();apuSave(false);apuRender();}
 
 function apuViewMeasurements(){
- const p=apuProject();const rows=p.medicoes.map(m=>{const a=apuGetArticle(m.artigoId);return `<tr class="${APU_UI.selectedMeasurementId===m.id?'selected':''}" onclick="apuSelectVisualRow(event,'selectedMeasurementId','${m.id}')" ondblclick="apuEditMeasurement('${m.id}')"><td>${apuEsc(a?.art)}</td><td>${apuEsc(a?.descricao)}</td><td>${apuEsc(m.local)}</td><td class="num">${apuNum(m.np)||1}</td><td class="num">${m.comprimento??''}</td><td class="num">${m.largura??''}</td><td class="num">${m.altura??''}</td><td class="num">${apuNum(m.quantidade).toLocaleString('pt-PT',{maximumFractionDigits:4})}</td><td>${m.cad?'CAD':''}</td><td>${m.modo==='substituicao'?'Substituição':'Verificação'}</td></tr>`}).join('');
- const tools=`<button class="apu-tool" onclick="apuNewMeasurement()">Nova linha</button><button class="apu-tool" onclick="apuEditMeasurement()">Editar</button><button class="apu-tool danger" onclick="apuDeleteSelectedMeasurement()">Eliminar</button><button class="apu-tool" onclick="apuSetMeasurementMode('verificacao')">Modo Verificação</button><button class="apu-tool" onclick="apuSetMeasurementMode('substituicao')">Modo Substituição</button>`;
- return `${apuViewHeader('Mapa de Quantidades','Medições e Quantidades',tools)}<div class="apu-view-content">${apuTable(['Art.','Descrição','Local','NP','Comprimento','Largura','Altura','Quantidade','CAD','Modo'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuRecalcMeasurements();apuSave(false);apuRender()">Atualizar quantidades</button>`)}`;
+    const p=apuProject();
+    const modo=p.medicaoModo==='substituicao'?'substituicao':'verificacao';
+
+    const rows=p.medicoes.map(m=>{
+        const a=apuGetArticle(m.artigoId);
+        return `<tr class="${APU_UI.selectedMeasurementId===m.id?'selected':''}"
+                    onclick="apuSelectVisualRow(event,'selectedMeasurementId','${m.id}')"
+                    ondblclick="apuEditMeasurement('${m.id}')">
+            <td>${apuEsc(a?.art)}</td>
+            <td>${apuEsc(a?.descricao)}</td>
+            <td class="${m.cad?'apu-measure-cad':''}">${apuEsc(m.local)}</td>
+            <td class="num ${m.cad?'apu-measure-cad':''}">${apuNum(m.np)||1}</td>
+            <td class="num ${m.cad?'apu-measure-cad':''}">${m.comprimento??''}</td>
+            <td class="num ${m.cad?'apu-measure-cad':''}">${m.largura??''}</td>
+            <td class="num ${m.cad?'apu-measure-cad':''}">${m.altura??''}</td>
+            <td class="num ${m.cad?'apu-measure-cad':''}">${apuNum(m.quantidade).toLocaleString('pt-PT',{maximumFractionDigits:4})}</td>
+        </tr>`;
+    }).join('');
+
+    const tools=`
+        <button class="apu-tool" onclick="apuNewMeasurement()">Nova linha</button>
+        <button class="apu-tool" onclick="apuEditMeasurement()">Editar</button>
+        <button class="apu-tool danger" onclick="apuDeleteSelectedMeasurement()">Eliminar</button>
+        <button class="apu-tool ${modo==='verificacao'?'active':''}" onclick="apuSetMeasurementMode('verificacao')">Verificação</button>
+        <button class="apu-tool ${modo==='substituicao'?'active':''}" onclick="apuSetMeasurementMode('substituicao')">Substituição</button>
+    `;
+
+    return `${apuViewHeader(
+        'Mapa de Quantidades',
+        `Medições e Quantidades — modo ${modo==='substituicao'?'Substituição':'Verificação'}`,
+        tools
+    )}
+    <div class="apu-view-content">
+        ${apuTable(['Art.','Descrição','Local','NP','Comprimento','Largura','Altura','Quantidade'],rows)}
+    </div>
+    ${apuBottom(`
+        <button class="apu-tool" onclick="apuRecalcMeasurements();apuSave(false);apuRender()">Atualizar quantidades</button>
+    `)}`;
 }
 function apuEditMeasurement(id=null){
- const p=apuProject();id=id||APU_UI.selectedMeasurementId;const old=id?p.medicoes.find(x=>x.id===id):null;if(!old)return alert('Selecione uma medição.');
- const opts=p.artigos.filter(a=>!a.bold).map(a=>`<option value="${a.id}" ${old.artigoId===a.id?'selected':''}>${apuEsc(a.art)} - ${apuEsc(a.descricao)}</option>`).join('');
- apuDialog('Editar Medição',`<div class="apu-form-grid"><div class="apu-form-span-2"><label>Artigo</label><select id="apu-m-art">${opts}</select></div><div><label>Modo</label><select id="apu-m-mode"><option value="verificacao" ${old.modo!=='substituicao'?'selected':''}>Verificação</option><option value="substituicao" ${old.modo==='substituicao'?'selected':''}>Substituição</option></select></div><div><label>Local</label><input id="apu-m-local" value="${apuEsc(old.local)}"></div><div><label>NP</label><input id="apu-m-np" type="number" value="${apuNum(old.np)||1}"></div><div><label>Comprimento</label><input id="apu-m-c" type="number" step="0.0001" value="${old.comprimento??''}"></div><div><label>Largura</label><input id="apu-m-l" type="number" step="0.0001" value="${old.largura??''}"></div><div><label>Altura</label><input id="apu-m-a" type="number" step="0.0001" value="${old.altura??''}"></div></div>`,()=>{
-   old.artigoId=document.getElementById('apu-m-art').value;old.modo=document.getElementById('apu-m-mode').value;old.local=document.getElementById('apu-m-local').value;old.np=apuNum(document.getElementById('apu-m-np').value)||1;old.comprimento=document.getElementById('apu-m-c').value;old.largura=document.getElementById('apu-m-l').value;old.altura=document.getElementById('apu-m-a').value;old.quantidade=apuMeasurementValue(old);apuRecalcMeasurements();apuDialogClose();apuSave(false);apuRender();
- });
+    const p=apuProject();
+    id=id||APU_UI.selectedMeasurementId;
+    const old=id?p.medicoes.find(x=>x.id===id):null;
+    if(!old)return alert('Selecione uma medição.');
+
+    const opts=p.artigos
+        .filter(a=>!a.bold)
+        .map(a=>`<option value="${a.id}" ${old.artigoId===a.id?'selected':''}>${apuEsc(a.art)} - ${apuEsc(a.descricao)}</option>`)
+        .join('');
+
+    apuDialog(
+        'Editar Medição',
+        `<div class="apu-form-grid">
+            <div class="apu-form-span-2">
+                <label>Artigo</label>
+                <select id="apu-m-art">${opts}</select>
+            </div>
+            <div>
+                <label>Local</label>
+                <input id="apu-m-local" value="${apuEsc(old.local)}">
+            </div>
+            <div>
+                <label>NP</label>
+                <input id="apu-m-np" type="number" value="${apuNum(old.np)||1}">
+            </div>
+            <div>
+                <label>Comprimento</label>
+                <input id="apu-m-c" type="number" step="0.0001" value="${old.comprimento??''}">
+            </div>
+            <div>
+                <label>Largura</label>
+                <input id="apu-m-l" type="number" step="0.0001" value="${old.largura??''}">
+            </div>
+            <div>
+                <label>Altura</label>
+                <input id="apu-m-a" type="number" step="0.0001" value="${old.altura??''}">
+            </div>
+        </div>`,
+        ()=>{
+            old.artigoId=document.getElementById('apu-m-art').value;
+            old.local=document.getElementById('apu-m-local').value;
+            old.np=apuNum(document.getElementById('apu-m-np').value)||1;
+            old.comprimento=document.getElementById('apu-m-c').value;
+            old.largura=document.getElementById('apu-m-l').value;
+            old.altura=document.getElementById('apu-m-a').value;
+            old.quantidade=apuMeasurementValue(old);
+            delete old.modo;
+
+            apuRecalcMeasurements();
+            apuDialogClose();
+            apuSave(false);
+            apuRender();
+        }
+    );
 }
 function apuDeleteSelectedMeasurement(){const p=apuProject(),id=APU_UI.selectedMeasurementId;if(!id)return alert('Selecione uma medição.');if(!confirm('Eliminar medição?'))return;p.medicoes=p.medicoes.filter(x=>x.id!==id);APU_UI.selectedMeasurementId=null;apuRecalcMeasurements();apuSave(false);apuRender();}
-function apuSetMeasurementMode(mode){const p=apuProject();const id=APU_UI.selectedMeasurementId;if(id){const m=p.medicoes.find(x=>x.id===id);if(m)m.modo=mode;}else{if(!p.medicoes.length)return; if(!confirm('Aplicar este modo a todas as medições?'))return;p.medicoes.forEach(m=>m.modo=mode);}apuRecalcMeasurements();apuSave(false);apuRender();}
+function apuSetMeasurementMode(mode){
+    const p=apuProject();
+    if(!p)return;
+
+    p.medicaoModo = mode==='substituicao' ? 'substituicao' : 'verificacao';
+    apuRecalcMeasurements();
+    apuSave(false);
+    apuRender();
+}
 
 function apuViewChapterMargins(){const p=apuProject();const chapters=[...new Set(p.artigos.filter(a=>a.bold).map(a=>String(a.capitulo||a.art||'')))];const rows=chapters.map(c=>`<tr><td>${apuEsc(c)}</td><td><input style="width:90px" type="number" step="0.001" data-apu-cap="${apuEsc(c)}" value="${apuNum(p.margensCapitulos[c]||1)}"></td></tr>`).join('');return `${apuViewHeader('Margens por Capítulos','K aplicado aos artigos do capítulo correspondente')}<div class="apu-view-content">${apuTable(['Capítulo','K'],rows)}</div>${apuBottom(`<button class="apu-tool" onclick="apuSaveChapterMargins()">Aplicar</button>`)}`;}
 function apuSaveChapterMargins(){const p=apuProject();document.querySelectorAll('[data-apu-cap]').forEach(el=>{p.margensCapitulos[el.dataset.apuCap]=apuNum(el.value)||1});apuApplyChapterMargins();}
@@ -6619,21 +8229,65 @@ function apuEditGenericPlanRow(key,id=null){id=id||(APU_UI.genericPlanSelection?
 function apuDeleteGenericPlanRow(key){const p=apuProject(),id=APU_UI.genericPlanSelection?.key===key?APU_UI.genericPlanSelection.id:null;if(!id)return alert('Selecione um registo.');if(!confirm('Eliminar registo?'))return;p[key]=(p[key]||[]).filter(x=>x.id!==id);APU_UI.genericPlanSelection=null;apuSave(false);apuRender();}
 
 function apuInstallKeyboard(){
-    if(window.__apuKeyboardInstalled)return;window.__apuKeyboardInstalled=true;
+    if(window.__apuKeyboardInstalled)return;
+    window.__apuKeyboardInstalled=true;
+
     document.addEventListener('keydown',e=>{
         if(currentMod!=='apu')return;
-        const tag=(e.target?.tagName||'').toLowerCase();if(['input','textarea','select'].includes(tag))return;
+
+        const tag=(e.target?.tagName||'').toLowerCase();
+        if(['input','textarea','select'].includes(tag))return;
+
         if(e.key==='F2'){
             e.preventDefault();
-            if(APU_UI.view==='lpu'&&APU_UI.selectedArticleId)apuEditArticle();
-            else if(APU_UI.view==='recursos'&&APU_UI.selectedResourceId)apuEditResource(APU_UI.selectedResourceId);
-            else if(APU_UI.view==='actividades'&&APU_UI.selectedActivityId)apuActivityDialog(APU_UI.selectedActivityId);
+
+            if(APU_UI.view==='lpu'&&APU_UI.selectedArticleId){
+                apuEditArticle();
+            }else if(APU_UI.view==='recursos'&&APU_UI.selectedResourceId){
+                apuEditResource(APU_UI.selectedResourceId);
+            }else if(APU_UI.view==='actividades'&&APU_UI.selectedActivityId){
+                apuActivityDialog(APU_UI.selectedActivityId);
+            }else if(APU_UI.view==='precosdirectos'&&APU_UI.selectedDirectPriceId){
+                apuEditDirectPrice();
+            }else if(APU_UI.view==='composicao'){
+                apuCompositionF2();
+            }else if(APU_UI.view==='atividade-composicao'){
+                if(APU_UI.selectedActivityComponentType==='atividade'){
+                    const a=apuGetActivity(APU_UI.selectedActivityId);
+                    const c=a?.actividades?.[APU_UI.selectedActivityComponentIndex];
+                    if(c)apuActivityDialog(c.actividadeId);
+                }else if(APU_UI.selectedActivityComponentType==='recurso'){
+                    const a=apuGetActivity(APU_UI.selectedActivityId);
+                    const c=a?.recursos?.[APU_UI.selectedActivityComponentIndex];
+                    if(c)apuEditResource(c.recursoId);
+                }
+            }
         }
-        if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'&&APU_UI.view==='lpu'&&APU_UI.selectedArticleId){e.preventDefault();const a=apuGetArticle(APU_UI.selectedArticleId);window.__apuClipboard={sourceId:a.id,recursos:JSON.parse(JSON.stringify(a.recursos||[])),actividades:JSON.parse(JSON.stringify(a.actividades||[]))};apuUpdateStatus('Composição copiada');}
-        if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'&&APU_UI.view==='lpu'&&APU_UI.selectedArticleId&&window.__apuClipboard){e.preventDefault();const a=apuGetArticle(APU_UI.selectedArticleId);if(window.__apuClipboard.sourceId!==a.id){a.recursos=JSON.parse(JSON.stringify(window.__apuClipboard.recursos));a.actividades=JSON.parse(JSON.stringify(window.__apuClipboard.actividades));apuSave(false);apuRender();apuUpdateStatus('Composição colada');}}
+
+        if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'&&APU_UI.view==='lpu'&&APU_UI.selectedArticleId){
+            e.preventDefault();
+            const a=apuGetArticle(APU_UI.selectedArticleId);
+            window.__apuClipboard={
+                sourceId:a.id,
+                recursos:JSON.parse(JSON.stringify(a.recursos||[])),
+                actividades:JSON.parse(JSON.stringify(a.actividades||[]))
+            };
+            apuUpdateStatus('Composição copiada');
+        }
+
+        if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'&&APU_UI.view==='lpu'&&APU_UI.selectedArticleId&&window.__apuClipboard){
+            e.preventDefault();
+            const a=apuGetArticle(APU_UI.selectedArticleId);
+            if(window.__apuClipboard.sourceId!==a.id){
+                a.recursos=JSON.parse(JSON.stringify(window.__apuClipboard.recursos));
+                a.actividades=JSON.parse(JSON.stringify(window.__apuClipboard.actividades));
+                apuSave(false);
+                apuRender();
+                apuUpdateStatus('Composição colada');
+            }
+        }
     });
 }
-
 
 function showMod(mod) {
 
