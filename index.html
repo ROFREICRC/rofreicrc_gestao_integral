@@ -671,10 +671,11 @@
     vertical-align: top;
 }
 
-.filtros-multiselect-orcamentos input,
-.filtros-multiselect-orcamentos select {
+.filtros-multiselect-orcamentos input {
     width: 100%;
+    height: 30px;
     box-sizing: border-box;
+    padding: 5px 7px;
     border: 1px solid #d7dee8;
     border-radius: 6px;
     background: #ffffff;
@@ -682,21 +683,11 @@
     font-size: 10px;
 }
 
-.filtros-multiselect-orcamentos input {
-    height: 30px;
-    padding: 5px 7px;
-    margin-bottom: 4px;
+.filtros-multiselect-orcamentos input::placeholder {
+    color: #94a3b8;
 }
 
-.filtros-multiselect-orcamentos select {
-    min-width: 90px;
-    max-width: 180px;
-    height: 48px;
-    padding: 2px;
-}
-
-.filtros-multiselect-orcamentos input:focus,
-.filtros-multiselect-orcamentos select:focus {
+.filtros-multiselect-orcamentos input:focus {
     outline: none;
     border-color: #b9cee3;
     box-shadow: 0 0 0 2px rgba(185,206,227,0.25);
@@ -724,7 +715,6 @@
 .orcamentos-filtro-limpar:hover {
     background: #e2ebf4;
 }
-
 .orcamentos-tabela td {
     padding: 7px 8px;
     border: 1px solid #e1e7ee;
@@ -4320,220 +4310,178 @@ function renderOrcamentos() {
 					    </tr>
 					
 					    <tr class="filtros-multiselect-orcamentos">
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-num"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-num"
-					                data-coluna="0"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-designacao"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-designacao"
-					                data-coluna="1"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-prazo"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-prazo"
-					                data-coluna="2"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-rececao"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-rececao"
-					                data-coluna="3"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-apresentacao"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-apresentacao"
-					                data-coluna="4"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-tempo"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-tempo"
-					                data-coluna="5"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-obs"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-obs"
-					                data-coluna="6"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-estado"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-estado"
-					                data-coluna="7"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-link"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-link"
-					                data-coluna="8"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-obra"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-obra"
-					                data-coluna="9"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-custo"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-custo"
-					                data-coluna="10"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-venda"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-venda"
-					                data-coluna="11"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-k"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-k"
-					                data-coluna="12"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th>
-					            <input
-					                type="text"
-					                id="pesquisa-orc-perck"
-					                placeholder="Escrever..."
-					                oninput="aplicarFiltrosOrcamentos()"
-					            >
-					            <select
-					                id="filtro-orc-perck"
-					                data-coluna="13"
-					                multiple
-					                onchange="aplicarFiltrosOrcamentos()"
-					            ></select>
-					        </th>
-					
-					        <th></th>
-					
-					    </tr>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-num"
+						            data-coluna="0"
+						            list="lista-filtro-orc-num"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-num"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-designacao"
+						            data-coluna="1"
+						            list="lista-filtro-orc-designacao"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-designacao"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-prazo"
+						            data-coluna="2"
+						            list="lista-filtro-orc-prazo"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-prazo"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-rececao"
+						            data-coluna="3"
+						            list="lista-filtro-orc-rececao"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-rececao"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-apresentacao"
+						            data-coluna="4"
+						            list="lista-filtro-orc-apresentacao"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-apresentacao"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-tempo"
+						            data-coluna="5"
+						            list="lista-filtro-orc-tempo"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-tempo"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-obs"
+						            data-coluna="6"
+						            list="lista-filtro-orc-obs"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-obs"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-estado"
+						            data-coluna="7"
+						            list="lista-filtro-orc-estado"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-estado"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-link"
+						            data-coluna="8"
+						            list="lista-filtro-orc-link"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-link"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-obra"
+						            data-coluna="9"
+						            list="lista-filtro-orc-obra"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-obra"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-custo"
+						            data-coluna="10"
+						            list="lista-filtro-orc-custo"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-custo"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-venda"
+						            data-coluna="11"
+						            list="lista-filtro-orc-venda"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-venda"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-k"
+						            data-coluna="12"
+						            list="lista-filtro-orc-k"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-k"></datalist>
+						    </th>
+						
+						    <th>
+						        <input
+						            type="text"
+						            id="filtro-orc-perck"
+						            data-coluna="13"
+						            list="lista-filtro-orc-perck"
+						            placeholder="Filtrar..."
+						            oninput="aplicarFiltrosOrcamentos()"
+						        >
+						        <datalist id="lista-filtro-orc-perck"></datalist>
+						    </th>
+						
+						    <th></th>
+						
+						</tr>
 					
 					</thead>
 
@@ -5544,33 +5492,23 @@ function aplicarFiltrosOrcamentos() {
 
     if (!tabela) return;
 
-    const linhas =
-        tabela.querySelectorAll(
-            'tbody tr.proposta-row'
-        );
-
-    const camposEscrita =
+    const campos =
         tabela.querySelectorAll(
             '.filtros-multiselect-orcamentos input[data-coluna]'
         );
 
-    const filtrosMultiplos =
+    const linhas =
         tabela.querySelectorAll(
-            '.filtros-multiselect-orcamentos select[data-coluna]'
+            'tbody tr.proposta-row'
         );
 
     linhas.forEach(linha => {
 
         let mostrar = true;
 
-        camposEscrita.forEach(campo => {
+        campos.forEach(campo => {
 
             if (!mostrar) return;
-
-            const coluna =
-                Number(
-                    campo.dataset.coluna
-                );
 
             const pesquisa =
                 campo.value
@@ -5581,44 +5519,10 @@ function aplicarFiltrosOrcamentos() {
                 return;
             }
 
-            const texto =
-                (
-                    linha.cells[
-                        coluna
-                    ]?.textContent || ''
-                )
-                    .trim()
-                    .toLowerCase();
-
-            if (!texto.includes(pesquisa)) {
-                mostrar = false;
-            }
-
-        });
-
-        filtrosMultiplos.forEach(filtro => {
-
-            if (!mostrar) return;
-
             const coluna =
                 Number(
-                    filtro.dataset.coluna
+                    campo.dataset.coluna
                 );
-
-            const valores =
-                Array.from(
-                    filtro.selectedOptions
-                )
-                .map(
-                    option =>
-                        option.value
-                            .trim()
-                            .toLowerCase()
-                );
-
-            if (!valores.length) {
-                return;
-            }
 
             const texto =
                 (
@@ -5629,7 +5533,11 @@ function aplicarFiltrosOrcamentos() {
                     .trim()
                     .toLowerCase();
 
-            if (!valores.includes(texto)) {
+            if (
+                !texto.includes(
+                    pesquisa
+                )
+            ) {
                 mostrar = false;
             }
 
@@ -5657,17 +5565,29 @@ function preencherFiltrosOrcamentos() {
             'tbody tr.proposta-row'
         );
 
-    const filtros =
+    const campos =
         tabela.querySelectorAll(
-            '.filtros-multiselect-orcamentos select[data-coluna]'
+            '.filtros-multiselect-orcamentos input[data-coluna]'
         );
 
-    filtros.forEach(filtro => {
+    campos.forEach(campo => {
 
         const coluna =
             Number(
-                filtro.dataset.coluna
+                campo.dataset.coluna
             );
+
+        const datalistId =
+            campo.getAttribute(
+                'list'
+            );
+
+        const datalist =
+            document.getElementById(
+                datalistId
+            );
+
+        if (!datalist) return;
 
         const valores =
             new Set();
@@ -5702,7 +5622,7 @@ function preencherFiltrosOrcamentos() {
                         )
                 );
 
-        filtro.innerHTML = '';
+        datalist.innerHTML = '';
 
         valoresOrdenados.forEach(valor => {
 
@@ -5714,10 +5634,7 @@ function preencherFiltrosOrcamentos() {
             option.value =
                 valor;
 
-            option.textContent =
-                valor;
-
-            filtro.appendChild(
+            datalist.appendChild(
                 option
             );
 
@@ -5725,7 +5642,6 @@ function preencherFiltrosOrcamentos() {
 
     });
 }
-
 
 function limparFiltrosOrcamentos() {
 
@@ -5738,27 +5654,11 @@ function limparFiltrosOrcamentos() {
 
     tabela
         .querySelectorAll(
-            '.filtros-multiselect-orcamentos input'
+            '.filtros-multiselect-orcamentos input[data-coluna]'
         )
         .forEach(campo => {
 
             campo.value = '';
-
-        });
-
-    tabela
-        .querySelectorAll(
-            '.filtros-multiselect-orcamentos select'
-        )
-        .forEach(filtro => {
-
-            Array.from(
-                filtro.options
-            ).forEach(option => {
-
-                option.selected = false;
-
-            });
 
         });
 
