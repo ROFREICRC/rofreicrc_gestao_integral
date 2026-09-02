@@ -560,6 +560,52 @@
    ORÇAMENTOS — MATRIZ DE PROPOSTAS
    ========================================================= */
 
+.orcamentos-seletor-anos {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    margin: 0 0 15px 0;
+    padding: 10px;
+    background: #f8fafc;
+    border: 1px solid #dbe3ec;
+    border-radius: 9px;
+}
+
+.orcamentos-seletor-anos-titulo {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    margin-right: 4px;
+}
+
+.orcamentos-ano-btn {
+    width: auto !important;
+    min-width: 72px;
+    padding: 8px 12px !important;
+    border: 1px solid #d5e1ee !important;
+    border-radius: 9px !important;
+    background: #eef3f8 !important;
+    color: #475569 !important;
+    cursor: pointer;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    transition: all 0.2s ease;
+}
+
+.orcamentos-ano-btn:hover {
+    background: #e2ebf4 !important;
+    transform: translateY(-1px);
+}
+
+.orcamentos-ano-btn.selected {
+    background: #d5e5f6 !important;
+    border-color: #b9cee3 !important;
+    color: #334155 !important;
+    box-shadow: inset 0 0 0 1px #b9cee3;
+}
+		
 .orcamentos-resumo {
     margin-bottom: 18px;
     background: #ffffff;
@@ -822,33 +868,22 @@
             id="nav-orcamentos-lista"
             type="button"
             class="menu-orcamentos-subprincipal"
-            onclick="alternarListaPropostas()"
+            onclick="mostrarListaPropostas()"
         >
-            📋 LISTA DE PROPOSTAS ▾
+            📋 LISTA DE PROPOSTAS
         </button>
 
         <div
-            id="menu-lista-propostas"
-            class="menu-lista-propostas-dropdown"
-        >
-
-            <button
-                type="button"
-                onclick="mostrarListaPropostas()"
-            >
-                📋 Todas as Propostas
-            </button>
-
-            <button
-                type="button"
-                onclick="abrirNovoAnoOrcamento()"
-            >
-                ➕ NOVO ANO
-            </button>
-
-            <div id="lista-anos-orcamentos"></div>
-
-        </div>
+		    id="menu-lista-propostas"
+		    class="menu-lista-propostas-dropdown"
+		>
+		    <button
+		        type="button"
+		        onclick="mostrarListaPropostas()"
+		    >
+		        📋 Todas as Propostas
+		    </button>
+		</div>
 
     </div>
 
@@ -1007,6 +1042,12 @@
 
         </div>
 
+		<div
+		    id="orcamentos-seletor-anos"
+		    class="orcamentos-seletor-anos"
+		>
+		</div>
+		
         <div
             id="list-orcamentos"
             style="margin-top:15px;"
@@ -1779,7 +1820,7 @@ let currentMod = 'obras';
 let editingId = null;
 
 let editingOrcamentoId = null;
-let orcamentoAnoSelecionado = null; 
+let orcamentoAnosSelecionados = []; 
 let activeNotaId = null; 
 let activeFileId = null;
 let massMode = false;
@@ -2738,76 +2779,112 @@ function renderAnosOrcamentos() {
 
     const container =
         document.getElementById(
-            'lista-anos-orcamentos'
+            'orcamentos-seletor-anos'
         );
 
     if (!container) return;
 
     container.innerHTML = '';
 
-    DB.orcamentosAnos.forEach(item => {
+    const titulo =
+        document.createElement('span');
 
-        const wrapper =
-            document.createElement('div');
+    titulo.className =
+        'orcamentos-seletor-anos-titulo';
 
-        wrapper.style.display = 'flex';
-        wrapper.style.gap = '4px';
-        wrapper.style.alignItems = 'center';
+    titulo.innerText =
+        'Ano(s):';
+
+    container.appendChild(titulo);
+
+    const anos =
+        [...DB.orcamentosAnos]
+            .sort(
+                (a, b) =>
+                    Number(b.ano) -
+                    Number(a.ano)
+            );
+
+    anos.forEach(item => {
 
         const button =
             document.createElement('button');
 
         button.type = 'button';
 
-        button.innerHTML =
-            `📅 ${item.ano}`;
+        button.className =
+            'orcamentos-ano-btn';
 
-        button.style.flex = '1';
-
-        button.onclick = () =>
-            abrirAnoOrcamento(item.ano);
-
-        wrapper.appendChild(button);
+        button.innerText =
+            item.ano;
 
         if (
-            user &&
-            user.role === 'Administrador'
+            orcamentoAnosSelecionados
+                .includes(
+                    Number(item.ano)
+                )
         ) {
 
-            const deleteButton =
-                document.createElement('button');
-
-            deleteButton.type = 'button';
-
-            deleteButton.innerHTML = '🗑️';
-
-            deleteButton.title =
-                `Eliminar ano ${item.ano}`;
-
-            deleteButton.style.width = '38px';
-            deleteButton.style.flex = '0 0 38px';
-            deleteButton.style.background = '#f7e4e5';
-            deleteButton.style.border =
-                '1px solid #ead1d4';
-            deleteButton.style.color = '#7a5056';
-            deleteButton.style.borderRadius = '9px';
-            deleteButton.style.cursor = 'pointer';
-
-            deleteButton.onclick = event => {
-
-                event.stopPropagation();
-
-                eliminarAnoOrcamento(item.ano);
-            };
-
-            wrapper.appendChild(
-                deleteButton
+            button.classList.add(
+                'selected'
             );
         }
 
-        container.appendChild(wrapper);
+        button.onclick = () =>
+            alternarAnoOrcamento(
+                item.ano
+            );
+
+        container.appendChild(
+            button
+        );
     });
+
+    if (user) {
+
+        const novoAno =
+            document.createElement('button');
+
+        novoAno.type = 'button';
+
+        novoAno.className =
+            'orcamentos-ano-btn';
+
+        novoAno.innerText =
+            '＋ NOVO ANO';
+
+        novoAno.onclick =
+            abrirNovoAnoOrcamento;
+
+        container.appendChild(
+            novoAno
+        );
+    }
 }
+
+function alternarAnoOrcamento(ano) {
+
+    ano = Number(ano);
+
+    const indice =
+        orcamentoAnosSelecionados
+            .indexOf(ano);
+
+    if (indice >= 0) {
+
+        orcamentoAnosSelecionados
+            .splice(indice, 1);
+
+    } else {
+
+        orcamentoAnosSelecionados
+            .push(ano);
+    }
+
+    renderAnosOrcamentos();
+
+    renderOrcamentos();
+}	
 
 function mostrarMenuOrcamentos() {
 
@@ -2859,7 +2936,7 @@ function alternarListaPropostas() {
 
 function mostrarListaPropostas() {
 
-    orcamentoAnoSelecionado = null;
+    orcamentoAnosSelecionados = [];
 
     const menu =
         document.getElementById(
@@ -3147,15 +3224,19 @@ function renderOrcamentos() {
         )
         : [];
 
-    // Filtrar pelo ano selecionado
-    if (orcamentoAnoSelecionado !== null) {
-
-        propostas = propostas.filter(
-            proposta =>
-                Number(proposta.ano) ===
-                Number(orcamentoAnoSelecionado)
-        );
-    }
+    // Filtrar pelos anos selecionados
+	if (
+	    Array.isArray(orcamentoAnosSelecionados) &&
+	    orcamentoAnosSelecionados.length > 0
+	) {
+	
+	    propostas = propostas.filter(
+	        proposta =>
+	            orcamentoAnosSelecionados.includes(
+	                Number(proposta.ano)
+	            )
+	    );
+	}
 
     // Ordem da matriz: Nº Proposta
     propostas.sort((a, b) =>
