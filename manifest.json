@@ -11,15 +11,15 @@
   "theme_color": "#dbe7f2",
   "icons": [
     {
-      "src": "LOGO RCRC-192.jpg",
+      "src": "LOGO RCRC-192.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "LOGO RCRC-512.jpg",
+      "src": "LOGO RCRC-512.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     }
   ]
