@@ -1,12 +1,12 @@
-const CACHE_NAME = 'rofreicrc-v1';
+const CACHE_NAME = 'rofreicrc-v2';
 
 const ASSETS = [
     './',
     './index.html',
     './manifest.json',
     './LOGO RCRC.jpg',
-    './LOGO RCRC-192.jpg',
-    './LOGO RCRC-512.jpg'
+    './LOGO RCRC-192.png',
+    './LOGO RCRC-512.png'
 ];
 
 
