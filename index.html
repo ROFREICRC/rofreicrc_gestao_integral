@@ -954,11 +954,98 @@
 .apu-empty { padding:30px; text-align:center; color:#64748b; border:1px dashed #cbd5e1; background:#fafafa; }
 @media(max-width:1000px){ .apu-workarea{grid-template-columns:1fr}.apu-tree{border-right:0;border-bottom:1px solid #aeb7c2}.apu-form-grid{grid-template-columns:1fr 1fr}.apu-split{grid-template-columns:1fr} }
 
+
+/* ===== ROFREICRC: acceso para instalar como aplicación ===== */
+#btn-install-rofreicrc {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 12000;
+    width: 62px;
+    height: 62px;
+    padding: 5px;
+    border: 1px solid #cbd5e1;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.18);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+#btn-install-rofreicrc:hover {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 12px 30px rgba(15,23,42,0.24);
+}
+
+#btn-install-rofreicrc img {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+    border-radius: 10px;
+}
+
+#btn-install-rofreicrc::after {
+    content: "↓";
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #334155;
+    color: #fff;
+    font-size: 15px;
+    line-height: 22px;
+    text-align: center;
+    font-weight: 700;
+    border: 2px solid #fff;
+}
+
+@media (display-mode: standalone) {
+    #btn-install-rofreicrc {
+        display: none !important;
+    }
+}
+
+@media (max-width: 700px) {
+    #btn-install-rofreicrc {
+        width: 56px;
+        height: 56px;
+        right: 12px;
+        bottom: 12px;
+    }
+
+    #btn-install-rofreicrc img {
+        width: 44px;
+        height: 44px;
+    }
+}
+
     </style>
 
-	<link rel="icon" href="data:,">
+	<link rel="icon" type="image/jpeg" href="LOGO RCRC.jpg">
+	<link rel="apple-touch-icon" href="LOGO RCRC.jpg">
+	<meta name="theme-color" content="#dbe7f2">
+	<meta name="application-name" content="ROFREICRC">
+	<meta name="mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="default">
+	<meta name="apple-mobile-web-app-title" content="ROFREICRC">
 </head>
 <body>
+
+<button
+    id="btn-install-rofreicrc"
+    type="button"
+    title="Instalar ROFREICRC como aplicación"
+    aria-label="Instalar ROFREICRC como aplicación"
+>
+    <img src="LOGO RCRC.jpg" alt="ROFREICRC">
+</button>
+
 <header id="main-header">
 
     <button
@@ -13655,5 +13742,115 @@ window.onload = () => {
 
 <datalist id="lista-forn-sug"></datalist>
 <datalist id="lista-task-sug"></datalist>
+
+<script>
+(function () {
+    let deferredInstallPrompt = null;
+    const installButtonId = 'btn-install-rofreicrc';
+
+    function getButton() {
+        return document.getElementById(installButtonId);
+    }
+
+    function isStandalone() {
+        return window.matchMedia('(display-mode: standalone)').matches ||
+               window.navigator.standalone === true;
+    }
+
+    function hideInstallButtonIfInstalled() {
+        const btn = getButton();
+
+        if (btn && isStandalone()) {
+            btn.style.display = 'none';
+        }
+    }
+
+    window.addEventListener('beforeinstallprompt', function (event) {
+        event.preventDefault();
+        deferredInstallPrompt = event;
+    });
+
+    window.addEventListener('appinstalled', function () {
+        deferredInstallPrompt = null;
+
+        const btn = getButton();
+
+        if (btn) {
+            btn.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        hideInstallButtonIfInstalled();
+
+        const btn = getButton();
+
+        if (!btn) {
+            return;
+        }
+
+        btn.addEventListener('click', async function () {
+
+            if (isStandalone()) {
+                btn.style.display = 'none';
+                return;
+            }
+
+            if (deferredInstallPrompt) {
+
+                deferredInstallPrompt.prompt();
+
+                try {
+                    await deferredInstallPrompt.userChoice;
+                } catch (e) {}
+
+                deferredInstallPrompt = null;
+                return;
+            }
+
+            const ua = navigator.userAgent || '';
+
+            const isiOS =
+                /iPad|iPhone|iPod/.test(ua) ||
+                (navigator.platform === 'MacIntel' &&
+                 navigator.maxTouchPoints > 1);
+
+            const isEdge = /Edg\//.test(ua);
+
+            const isChrome =
+                /Chrome\//.test(ua) &&
+                !isEdge;
+
+            if (isiOS) {
+
+                alert(
+                    'Para instalar ROFREICRC en iPhone/iPad: abra el menú Compartir del navegador y seleccione “Añadir a pantalla de inicio”.'
+                );
+
+            } else if (isEdge) {
+
+                alert(
+                    'Para instalar ROFREICRC en este PC: abra el menú ⋯ de Microsoft Edge, entre en “Aplicaciones” y elija “Instalar este sitio como una aplicación”.'
+                );
+
+            } else if (isChrome) {
+
+                alert(
+                    'Para instalar ROFREICRC: abra el menú ⋮ de Chrome y elija la opción de instalar la página como aplicación / añadir a pantalla de inicio.'
+                );
+
+            } else {
+
+                alert(
+                    'Use la opción “Instalar aplicación” o “Añadir a pantalla de inicio” disponible en el menú de su navegador.'
+                );
+            }
+        });
+    });
+
+})();
+</script>
+
 </body>
 </html>
