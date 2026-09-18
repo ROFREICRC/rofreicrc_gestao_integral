@@ -1,22 +1,82 @@
-// Este nombre se genera solo con la fecha para forzar la actualización si es necesario
-const CACHE_NAME = 'rofreicrc-' + new Date().getTime();
-const assets = ['./', './index.html', './manifest.json'];
+const CACHE_NAME = 'rofreicrc-v1';
 
-self.addEventListener('install', e => {
-    // Elimina cachés viejos automáticamente para que no den error 404
-    e.waitUntil(
-        caches.keys().then(keys => {
-            return Promise.all(keys
-                .filter(key => key !== CACHE_NAME)
-                .map(key => caches.delete(key))
-            );
-        })
+const ASSETS = [
+    './',
+    './index.html',
+    './manifest.json',
+    './LOGO RCRC.jpg',
+    './LOGO RCRC-192.jpg',
+    './LOGO RCRC-512.jpg'
+];
+
+
+self.addEventListener('install', function(event) {
+
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(function(cache) {
+
+                return cache.addAll(ASSETS);
+
+            })
     );
+
     self.skipWaiting();
+
 });
 
-self.addEventListener('fetch', e => {
-    e.respondWith(
-        fetch(e.request).catch(() => caches.match(e.request))
+
+self.addEventListener('activate', function(event) {
+
+    event.waitUntil(
+        caches.keys().then(function(keys) {
+
+            return Promise.all(
+
+                keys.map(function(key) {
+
+                    if (key !== CACHE_NAME) {
+                        return caches.delete(key);
+                    }
+
+                })
+
+            );
+
+        })
     );
+
+    self.clients.claim();
+
+});
+
+
+self.addEventListener('fetch', function(event) {
+
+    if (event.request.method !== 'GET') {
+        return;
+    }
+
+    const url = new URL(event.request.url);
+
+    if (url.origin !== self.location.origin) {
+        return;
+    }
+
+    event.respondWith(
+
+        fetch(event.request)
+            .then(function(response) {
+
+                return response;
+
+            })
+            .catch(function() {
+
+                return caches.match(event.request);
+
+            })
+
+    );
+
 });
