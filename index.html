@@ -1026,8 +1026,13 @@
 
     </style>
 
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+	<link rel="manifest" href="manifest.json">
+
 	<link rel="icon" type="image/jpeg" href="LOGO RCRC.jpg">
-	<link rel="apple-touch-icon" href="LOGO RCRC.jpg">
+	<link rel="apple-touch-icon" href="LOGO RCRC-192.jpg">
+
 	<meta name="theme-color" content="#dbe7f2">
 	<meta name="application-name" content="ROFREICRC">
 	<meta name="mobile-web-app-capable" content="yes">
@@ -1040,8 +1045,8 @@
 <button
     id="btn-install-rofreicrc"
     type="button"
-    title="Instalar ROFREICRC como aplicação"
-	aria-label="Instalar ROFREICRC como aplicação"
+    title="Instalar o ROFREICRC como aplicação"
+	aria-label="Instalar o ROFREICRC como aplicação"
 >
     <img src="LOGO RCRC.jpg" alt="ROFREICRC">
 </button>
@@ -13846,8 +13851,35 @@ window.onload = () => {
 			        'Utilize a opção “Instalar aplicação” ou “Adicionar ao ecrã principal” disponível no menu do navegador.'
 			    );
 			}
-        });
+                });
     });
+
+
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+
+        window.addEventListener('load', function() {
+
+            navigator.serviceWorker.register('./sw.js')
+                .then(function(registration) {
+
+                    console.log(
+                        'ROFREICRC: Service Worker registado com sucesso.'
+                    );
+
+                })
+                .catch(function(error) {
+
+                    console.error(
+                        'ROFREICRC: erro ao registar o Service Worker.',
+                        error
+                    );
+
+                });
+
+        });
+
+    }
+
 
 })();
 </script>
